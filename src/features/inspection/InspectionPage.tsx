@@ -112,8 +112,7 @@ export function InspectionPage() {
 
   // Determine pass/fail: fail if any required check is false
   const failChecks = [isRoadworthy, mirrorsWorking, headlightsWorking].filter(v => v === false).length
-  const allAnswered = [isRoadworthy, isneat, isInteriorClean, mirrorsWorking, headlightsWorking].every(v => v !== undefined)
-  const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
+const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
 
   const validateStep = () => {
     if (step === 0 && !title.trim()) { setError('Inspection title is required.'); return false }

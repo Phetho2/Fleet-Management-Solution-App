@@ -8,6 +8,7 @@ import { ActivityPage }  from './features/activity/ActivityPage'
 import { ProfilePage }   from './features/profile/ProfilePage'
 
 import { InspectionPage }     from './features/inspection/InspectionPage'
+import { CheckInPage }        from './features/checkin/CheckInPage'
 import { CheckInOutPage }     from './features/checkinout/CheckInOutPage'
 import { IncidentPage }       from './features/incident/IncidentPage'
 import { DefectsPage }        from './features/defects/DefectsPage'
@@ -147,6 +148,7 @@ function Shell() {
         <Route path="/activity"  element={<ActivityPage />} />
         <Route path="/profile"   element={<ProfilePage />} />
         <Route path="/inspection" element={<InspectionPage />} />
+        <Route path="/checkin"    element={<CheckInPage />} />
         <Route path="/checkinout" element={<CheckInOutPage />} />
         <Route path="/incident"   element={<IncidentPage />} />
         <Route path="/defects"    element={<DefectsPage />} />

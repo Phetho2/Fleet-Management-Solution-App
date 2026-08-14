@@ -9,9 +9,10 @@
  *   new_vehicleinspection    → new_vehicleinspections
  *   new_vehicleaccidentreport→ new_vehicleaccidentreports
  *   new_vehicleservicerecord → new_vehicleservicerecords
- *
- * NOTE: trips, fuel, and defects tables were not found in Dataverse.
- * They may not have been created yet or may use different names.
+ *   new_fuelmilage           → new_fuelmilages
+ *   new_defectlog            → new_defectlogs
+ *   new_checkout             → new_checkouts
+ *   new_checkin              → new_checkins
  */
 export const TABLES = {
   drivers:     'new_drivers',
@@ -19,8 +20,8 @@ export const TABLES = {
   inspections: 'new_vehicleinspections',
   incidents:   'new_vehicleaccidentreports',
   services:    'new_vehicleservicerecords',
-  // These tables were not found in Dataverse — update when created:
-  trips:       'new_vehicletrips',
-  fuel:        'new_fuelentries',
-  defects:     'new_defectreports',
+  fuel:        'new_fuelmilages',
+  defects:     'new_defectlogs',
+  trips:       'new_checkouts',
+  checkins:    'new_checkins',
 } as const

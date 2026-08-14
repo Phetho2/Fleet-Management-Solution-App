@@ -67,7 +67,7 @@ export function IncidentPage() {
 
   // Step 3 — photos
   const [showCamera, setShowCamera]             = useState(false)
-  const [photoBlob, setPhotoBlob]               = useState<Blob | null>(null)
+  const [, setPhotoBlob]                         = useState<Blob | null>(null)
   const [photoPreview, setPhotoPreview]         = useState<string | null>(null)
 
   const [submitting, setSubmitting]             = useState(false)
@@ -97,16 +97,6 @@ export function IncidentPage() {
     setSubmitting(true); setError(null)
     try {
       const client = createDataverseClient(instance)
-
-      let photoBase64: string | undefined
-      if (photoBlob) {
-        photoBase64 = await new Promise<string>((res, rej) => {
-          const reader = new FileReader()
-          reader.onload  = ev => res((ev.target?.result as string).split(',')[1])
-          reader.onerror = rej
-          reader.readAsDataURL(photoBlob)
-        })
-      }
 
       const incidentTypeLabel = INCIDENT_TYPES.find(t => t.value === incidentType)?.label ?? 'Incident'
 

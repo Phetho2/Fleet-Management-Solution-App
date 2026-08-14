@@ -23,7 +23,8 @@ async function request<T>(
   instance: IPublicClientApplication,
   method: string,
   path: string,
-  body?: unknown
+  body?: unknown,
+  returnId = false
 ): Promise<T> {
   const token = await getDataverseToken(instance)
   const res = await fetch(`${BASE_URL}/api/data/v9.2/${path}`, {
@@ -50,7 +51,15 @@ async function request<T>(
     throw new Error(msg)
   }
 
-  if (res.status === 204) return undefined as T
+  if (res.status === 204) {
+    if (returnId) {
+      // Extract GUID from OData-EntityId header: ".../entity(guid)"
+      const entityId = res.headers.get('OData-EntityId') ?? ''
+      const match = entityId.match(/\(([^)]+)\)$/)
+      return (match ? match[1] : null) as T
+    }
+    return undefined as T
+  }
   return res.json() as Promise<T>
 }
 
@@ -60,9 +69,9 @@ export function createDataverseClient(instance: IPublicClientApplication) {
     retrieve: <T>(entity: string, query = '') =>
       request<{ value: T[] }>(instance, 'GET', `${entity}${query ? '?' + query : ''}`),
 
-    /** POST – creates a record */
+    /** POST – creates a record, returns the new record's GUID */
     create: (entity: string, data: Record<string, unknown>) =>
-      request<void>(instance, 'POST', entity, data),
+      request<string | null>(instance, 'POST', entity, data, true),
 
     /** PATCH – updates a record by id */
     update: (entity: string, id: string, data: Record<string, unknown>) =>

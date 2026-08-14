@@ -1,6 +1,22 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useShift } from '../../context/ShiftContext'
+import { useMsal } from '@azure/msal-react'
+import { createDataverseClient } from '../../api/dataverseClient'
+import { TABLES } from '../../api/tables'
+import { useShift, type ShiftState } from '../../context/ShiftContext'
+import { useDriver } from '../../context/DriverContext'
+import type { CheckinRecord, TripRecord, InspectionRecord } from '../../types/dataverse'
 
+/* ── Helpers ──────────────────────────────────────────────── */
+/** Returns the start of today's "shift day" — resets at 04:00 */
+function shiftDayStart(): Date {
+  const d = new Date()
+  d.setHours(4, 0, 0, 0)
+  if (new Date() < d) d.setDate(d.getDate() - 1)
+  return d
+}
+
+/* ── Sub-components ───────────────────────────────────────── */
 function PageHeader({ title, sub }: { title: string; sub: string }) {
   return (
     <header className="bg-navy text-white pt-safe">
@@ -13,15 +29,16 @@ function PageHeader({ title, sub }: { title: string; sub: string }) {
   )
 }
 
-function Pill({ color, children }: { color: 'green' | 'amber' | 'gray'; children: React.ReactNode }) {
+function Pill({ color, children }: { color: 'green' | 'amber' | 'gray' | 'blue'; children: React.ReactNode }) {
   const cls = {
     green: 'bg-[#DFF5E8] text-[#0B7A45]',
     amber: 'bg-[#FEF1DC] text-[#B0700B]',
+    blue:  'bg-[#EAF2FE] text-[#0A57C2]',
     gray:  'bg-[#E9EEF5] text-[#4A5568]',
   }[color]
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap ${cls}`}>
-      {color !== 'gray' && <span className="w-1.5 h-1.5 rounded-full bg-current" />}
+      {(color === 'green' || color === 'blue') && <span className="w-1.5 h-1.5 rounded-full bg-current" />}
       {children}
     </span>
   )
@@ -33,8 +50,9 @@ interface TaskItemProps {
   sub: string
   tag: React.ReactNode
   onClick?: () => void
+  loading?: boolean
 }
-function TaskItem({ icon, title, sub, tag, onClick }: TaskItemProps) {
+function TaskItem({ icon, title, sub, tag, onClick, loading }: TaskItemProps) {
   return (
     <button
       onClick={onClick}
@@ -47,11 +65,17 @@ function TaskItem({ icon, title, sub, tag, onClick }: TaskItemProps) {
         <div className="font-bold text-[14px] text-fleet-ink">{title}</div>
         <div className="text-[11.5px] text-fleet-ink-3 mt-0.5">{sub}</div>
       </div>
-      {tag}
+      {loading ? (
+        <svg className="animate-spin text-fleet-blue shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.2"/>
+          <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+        </svg>
+      ) : tag}
     </button>
   )
 }
 
+/* ── Icons ────────────────────────────────────────────────── */
 const IconClip = () => (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -81,20 +105,97 @@ const IconCam = () => (
     <circle cx="12" cy="13" r="3.5"/>
   </svg>
 )
+const IconWrench = () => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 6a4.5 4.5 0 0 0 5.7 5.7L13 19.4a2.6 2.6 0 0 1-3.7-3.7L17 8a4.5 4.5 0 0 0-2-2z"/>
+  </svg>
+)
 
+/* ── Main component ───────────────────────────────────────── */
 export function TodayPage() {
-  const { shift } = useShift()
+  const { instance } = useMsal()
+  const { driver } = useDriver()
+  const { shift, odoOut, checkinId, setShift, setOdoOut, setCheckinId } = useShift()
   const navigate = useNavigate()
 
-  const inspected = shift !== 'not-started'
+  const [syncing, setSyncing]       = useState(true)
+  const [fuelCount, setFuelCount]   = useState<number | null>(null)
+  const [defectCount, setDefectCount] = useState<number | null>(null)
+
+  // Derive checklist state from shift
+  const inspected  = shift !== 'not-started'
+  const checkedIn  = ['checked-in', 'on-trip', 'returned'].includes(shift)
   const checkedOut = shift === 'on-trip' || shift === 'returned'
-  const checkedIn = shift === 'returned'
+  const returned   = shift === 'returned'
 
   const done = (v: boolean) => <Pill color={v ? 'green' : 'amber'}>{v ? 'Done' : 'To do'}</Pill>
 
+  useEffect(() => {
+    if (!driver) return
+    const client = createDataverseClient(instance)
+    const iso = shiftDayStart().toISOString()
+
+    Promise.allSettled([
+      // 1. Inspection submitted today by this driver
+      client.retrieve<InspectionRecord>(TABLES.inspections,
+        `$filter=_new_inspectorrecord_value eq ${driver.new_driverid} and createdon ge ${iso}` +
+        `&$select=new_vehicleinspectionid&$top=1`),
+
+      // 2. Check-in record from today (most recent)
+      client.retrieve<CheckinRecord>(TABLES.checkins,
+        `$filter=createdon ge ${iso}` +
+        `&$select=new_checkinid,new_closingodometerkm&$orderby=createdon desc&$top=1`),
+
+      // 3. Active (on-trip) checkout record from today
+      client.retrieve<TripRecord>(TABLES.trips,
+        `$filter=statecode eq 0 and createdon ge ${iso}` +
+        `&$select=new_checkoutid,new_odometerreadingkm&$top=1`),
+
+      // 4. Fuel entries today
+      client.retrieve(TABLES.fuel,
+        `$filter=createdon ge ${iso}&$select=new_fuelmilageid&$top=50`),
+
+      // 5. Defects logged today
+      client.retrieve(TABLES.defects,
+        `$filter=createdon ge ${iso}&$select=new_defectlogid&$top=50`),
+    ]).then(([inspRes, checkinRes, checkoutRes, fuelRes, defectRes]) => {
+      const hasInspection  = inspRes.status    === 'fulfilled' && inspRes.value.value.length > 0
+      const checkinRecord  = checkinRes.status  === 'fulfilled' ? checkinRes.value.value[0]  as CheckinRecord | undefined : undefined
+      const checkoutRecord = checkoutRes.status === 'fulfilled' ? checkoutRes.value.value[0] as TripRecord | undefined    : undefined
+
+      // Sync IDs back into context if session was lost
+      if (checkinRecord?.new_checkinid && !checkinId) {
+        setCheckinId(checkinRecord.new_checkinid)
+      }
+      if (checkoutRecord?.new_odometerreadingkm && !odoOut) {
+        setOdoOut(String(checkoutRecord.new_odometerreadingkm))
+      }
+
+      // Derive true shift state from live data
+      const hasReturned       = !!checkinRecord?.new_closingodometerkm
+      const hasActiveCheckout = !!checkoutRecord
+      const hasCheckin        = !!checkinRecord && !hasReturned
+
+      let liveShift: ShiftState
+      if (hasReturned)          liveShift = 'returned'
+      else if (hasActiveCheckout) liveShift = 'on-trip'
+      else if (hasCheckin)      liveShift = 'checked-in'
+      else if (hasInspection)   liveShift = 'inspected'
+      else                      liveShift = 'not-started'
+
+      if (liveShift !== shift) setShift(liveShift)
+
+      // Counts
+      if (fuelRes.status === 'fulfilled')   setFuelCount(fuelRes.value.value.length)
+      if (defectRes.status === 'fulfilled') setDefectCount(defectRes.value.value.length)
+    }).finally(() => setSyncing(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver?.new_driverid])
+
   return (
     <div className="min-h-screen bg-[#F7F9FC]">
-      <PageHeader title="Today" sub="What needs doing before you drive" />
+      <PageHeader title="Today" sub="Your shift checklist" />
 
       <div className="p-4 space-y-3 max-w-lg mx-auto">
         {/* Info banner */}
@@ -103,7 +204,7 @@ export function TodayPage() {
             strokeWidth="2" strokeLinecap="round" className="shrink-0 mt-0.5">
             <circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.8v.1"/>
           </svg>
-          Your shift checklist resets every morning at 04:00.
+          Checklist synced from Dataverse · resets at 04:00 daily.
         </div>
 
         {/* Before you drive */}
@@ -116,14 +217,24 @@ export function TodayPage() {
             title="Daily inspection"
             sub="10 condition checks · ~2 min"
             tag={done(inspected)}
-            onClick={() => !inspected && navigate('/inspection')}
+            loading={syncing}
+            onClick={() => !inspected ? navigate('/inspection') : undefined}
+          />
+          <TaskItem
+            icon={<IconKey />}
+            title="Check in to vehicle"
+            sub="Sign in before your trip"
+            tag={done(checkedIn)}
+            loading={syncing}
+            onClick={() => inspected && !checkedIn ? navigate('/checkin') : undefined}
           />
           <TaskItem
             icon={<IconKey />}
             title="Check out vehicle"
             sub="Log odometer and trip purpose"
             tag={done(checkedOut)}
-            onClick={() => inspected && !checkedOut ? navigate('/checkinout') : undefined}
+            loading={syncing}
+            onClick={() => checkedIn && !checkedOut ? navigate('/checkinout') : undefined}
           />
         </div>
 
@@ -136,7 +247,14 @@ export function TodayPage() {
             icon={<IconFuel />}
             title="Capture fuel"
             sub="Every time you refuel"
-            tag={<Pill color="gray">Optional</Pill>}
+            tag={
+              fuelCount === null
+                ? <Pill color="gray">Optional</Pill>
+                : fuelCount === 0
+                ? <Pill color="gray">None today</Pill>
+                : <Pill color="blue">{fuelCount} capture{fuelCount !== 1 ? 's' : ''}</Pill>
+            }
+            loading={syncing}
             onClick={() => navigate('/fuel')}
           />
           <TaskItem
@@ -145,6 +263,20 @@ export function TodayPage() {
             sub="Only if something happens"
             tag={<Pill color="gray">As needed</Pill>}
             onClick={() => navigate('/incident')}
+          />
+          <TaskItem
+            icon={<IconWrench />}
+            title="Log a defect"
+            sub="Something not working right"
+            tag={
+              defectCount === null
+                ? <Pill color="gray">As needed</Pill>
+                : defectCount === 0
+                ? <Pill color="gray">None today</Pill>
+                : <Pill color="amber">{defectCount} logged</Pill>
+            }
+            loading={syncing}
+            onClick={() => navigate('/defects')}
           />
         </div>
 
@@ -155,9 +287,10 @@ export function TodayPage() {
         <div className="space-y-2">
           <TaskItem
             icon={<IconKey />}
-            title="Check in vehicle"
-            sub="Closing odometer and condition"
-            tag={done(checkedIn)}
+            title="Return vehicle"
+            sub={returned ? 'Vehicle returned · shift closed' : 'Close odometer & condition on return'}
+            tag={done(returned)}
+            loading={syncing}
             onClick={() => shift === 'on-trip' ? navigate('/checkinout') : undefined}
           />
         </div>

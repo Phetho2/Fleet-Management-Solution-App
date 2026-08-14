@@ -32,16 +32,14 @@ export function FuelPage() {
     try {
       const client = createDataverseClient(instance)
       const body: Record<string, unknown> = {
-        new_date:            new Date().toISOString(),
-        new_litres:          Number(litres),
-        new_totalcost:       Number(cost),
-        new_odometer:        Number(odo),
-        new_fuelstationname: station,
-        new_approvalstatus:  1,  // Pending
-        'new_driverrecord@odata.bind': `/new_drivers(${driver.new_driverid})`,
+        new_date:               new Date().toISOString(),
+        new_litresfilled:       Number(litres),
+        new_totalcostr:         Number(cost),
+        new_odometerreadingkm:  Number(odo),
+        new_fuelstation:        station,
       }
       if (vehicle) {
-        body['new_vehiclerecord@odata.bind'] = `/new_vehiclerecords(${vehicle.new_vehiclerecordid})`
+        body['new_vehicle'] = vehicle.new_vehicletitle
       }
       await client.create(TABLES.fuel, body)
       navigate('/')

@@ -1,12 +1,14 @@
 import { createContext, useContext, useState, ReactNode } from 'react'
 
-export type ShiftState = 'not-started' | 'inspected' | 'on-trip' | 'returned'
+export type ShiftState = 'not-started' | 'inspected' | 'checked-in' | 'on-trip' | 'returned'
 
 interface ShiftCtx {
-  shift: ShiftState
-  odoOut: string | null
-  setShift: (s: ShiftState) => void
-  setOdoOut: (v: string) => void
+  shift:        ShiftState
+  odoOut:       string | null
+  checkinId:    string | null
+  setShift:     (s: ShiftState) => void
+  setOdoOut:    (v: string) => void
+  setCheckinId: (id: string) => void
 }
 
 const Ctx = createContext<ShiftCtx | null>(null)
@@ -23,6 +25,10 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem('fleet_odo_out')
   )
 
+  const [checkinId, setCheckinIdRaw] = useState<string | null>(
+    () => localStorage.getItem('fleet_checkin_id')
+  )
+
   const setShift = (s: ShiftState) => {
     setShiftRaw(s)
     localStorage.setItem('fleet_shift_state', s)
@@ -34,7 +40,16 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('fleet_odo_out', v)
   }
 
-  return <Ctx.Provider value={{ shift, odoOut, setShift, setOdoOut }}>{children}</Ctx.Provider>
+  const setCheckinId = (id: string) => {
+    setCheckinIdRaw(id)
+    localStorage.setItem('fleet_checkin_id', id)
+  }
+
+  return (
+    <Ctx.Provider value={{ shift, odoOut, checkinId, setShift, setOdoOut, setCheckinId }}>
+      {children}
+    </Ctx.Provider>
+  )
 }
 
 export function useShift() {

@@ -180,15 +180,17 @@ export function DashboardPage() {
   const shiftPill = {
     'not-started': <Pill color="gray">Shift not started</Pill>,
     'inspected':   <Pill color="blue">Inspection done</Pill>,
+    'checked-in':  <Pill color="blue">Checked in</Pill>,
     'on-trip':     <Pill color="green">On trip</Pill>,
     'returned':    <Pill color="gray">Shift complete</Pill>,
   }[shift]
 
   const shiftAlert = {
-    'not-started': <Alert type="warn">Complete your daily inspection before checking out this vehicle.</Alert>,
-    'inspected':   <Alert type="ok">Inspection passed. You can check out the vehicle now.</Alert>,
-    'on-trip':     <Alert type="info">Checked out · Odometer {odoOut ? `${Number(odoOut).toLocaleString()} km` : 'recorded'}. Remember to check in at the end of your shift.</Alert>,
-    'returned':    <Alert type="ok">Shift closed. Everything has been submitted — well done.</Alert>,
+    'not-started': <Alert type="warn">Complete your daily inspection before you can check in.</Alert>,
+    'inspected':   <Alert type="info">Inspection done. Check in to the vehicle to start your shift.</Alert>,
+    'checked-in':  <Alert type="ok">Checked in. Log your odometer and purpose of trip to check out.</Alert>,
+    'on-trip':     <Alert type="info">Vehicle checked out at {odoOut ? `${Number(odoOut).toLocaleString()} km` : '—'}. Tap <strong>Return vehicle</strong> when you are back.</Alert>,
+    'returned':    <Alert type="ok">Vehicle returned. Your trip record has been closed — well done.</Alert>,
   }[shift]
 
   return (
@@ -240,6 +242,7 @@ export function DashboardPage() {
 
         {/* Action tiles 2×2 */}
         <div className="grid grid-cols-2 gap-3">
+          {/* Inspection */}
           <Tile
             icon={<IconClip />}
             title="Daily inspection"
@@ -248,20 +251,50 @@ export function DashboardPage() {
             done={shift !== 'not-started'}
             onClick={() => navigate('/inspection')}
           />
+
+          {/* Check-in */}
+          <Tile
+            icon={<IconKey />}
+            title="Check in"
+            sub={
+              shift === 'not-started'  ? 'Inspection first' :
+              shift === 'inspected'    ? 'Sign in to vehicle' :
+              'Checked in'
+            }
+            done={['checked-in', 'on-trip', 'returned'].includes(shift)}
+            disabled={shift === 'not-started'}
+            onClick={() => navigate('/checkin')}
+          />
+
+          {/* Check-out / Return vehicle */}
           {shift === 'on-trip' ? (
-            <Tile icon={<IconKey />} title="Check in" sub="End your trip" onClick={() => navigate('/checkinout')} />
+            <Tile
+              icon={<IconKey />}
+              title="Return vehicle"
+              sub="Mark vehicle as returned"
+              onClick={() => navigate('/checkinout')}
+            />
           ) : (
             <Tile
               icon={<IconKey />}
               title="Check out"
-              sub={shift === 'inspected' ? 'Log odometer' : 'Inspection first'}
-              disabled={shift !== 'inspected'}
+              sub={
+                shift === 'checked-in' ? 'Log odometer & purpose' :
+                shift === 'returned'   ? 'Vehicle returned' :
+                'Check in first'
+              }
+              done={shift === 'returned'}
+              disabled={shift !== 'checked-in'}
               onClick={() => navigate('/checkinout')}
             />
           )}
+
+          {/* Incident */}
           <Tile icon={<IconCam />} title="Report incident" sub="With photos" onClick={() => navigate('/incident')} />
-          <Tile icon={<IconFuel />} title="Fuel &amp; mileage" sub="Capture refuel" onClick={() => navigate('/fuel')} />
         </div>
+
+        {/* Fuel — full-width */}
+        <Tile icon={<IconFuel />} title="Fuel &amp; mileage" sub="Capture refuel" onClick={() => navigate('/fuel')} wide />
 
         {/* Defect — full-width */}
         <Tile icon={<IconWrench />} title="Log a defect" sub="Something not working right" onClick={() => navigate('/defects')} wide />

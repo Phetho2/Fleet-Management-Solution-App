@@ -7,21 +7,14 @@ import { FormShell } from '../../components/FormShell'
 import { useDriver } from '../../context/DriverContext'
 
 const DEFECT_TYPES = [
-  { value: 1, label: 'Engine' },
-  { value: 2, label: 'Transmission' },
-  { value: 3, label: 'Brakes' },
-  { value: 4, label: 'Tyres' },
-  { value: 5, label: 'Lights / Electrical' },
-  { value: 6, label: 'Body / Exterior' },
-  { value: 7, label: 'Air conditioning' },
-  { value: 8, label: 'Other' },
+  'Engine', 'Transmission', 'Brakes', 'Tyres',
+  'Lights / Electrical', 'Body / Exterior', 'Air conditioning', 'Other',
 ]
 
-const URGENCY = [
-  { value: 1, label: 'Low',      sub: 'Can wait for next service',     color: 'green' },
-  { value: 2, label: 'Medium',   sub: 'Needs attention this week',      color: 'amber' },
-  { value: 3, label: 'High',     sub: 'Fix before next trip',           color: 'red' },
-  { value: 4, label: 'Critical', sub: 'Vehicle off-road immediately',   color: 'red' },
+const SEVERITY = [
+  { value: 100000000, label: 'Low',    sub: 'Can wait for next service',  color: 'green' },
+  { value: 100000001, label: 'Medium', sub: 'Needs attention this week',   color: 'amber' },
+  { value: 100000002, label: 'High',   sub: 'Fix before next trip',        color: 'red' },
 ]
 
 export function DefectsPage() {
@@ -29,8 +22,8 @@ export function DefectsPage() {
   const { driver, vehicle } = useDriver()
   const navigate = useNavigate()
 
-  const [defectType, setDefectType] = useState(8)
-  const [urgency, setUrgency]       = useState(2)
+  const [defectType, setDefectType] = useState('Other')
+  const [severity, setSeverity]     = useState(100000001)
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting]   = useState(false)
   const [error, setError]             = useState<string | null>(null)
@@ -43,21 +36,15 @@ export function DefectsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!driver)      { setError('Driver profile not loaded.'); return }
     if (!description) { setError('Please describe the defect.'); return }
 
     setSubmitting(true); setError(null)
     try {
       const client = createDataverseClient(instance)
       const body: Record<string, unknown> = {
-        new_reportdate:  new Date().toISOString(),
-        new_defecttype:  defectType,
-        new_urgency:     urgency,
-        new_description: description,
-        'new_driverrecord@odata.bind': `/new_drivers(${driver.new_driverid})`,
-      }
-      if (vehicle) {
-        body['new_vehiclerecord@odata.bind'] = `/new_vehiclerecords(${vehicle.new_vehiclerecordid})`
+        new_whatisaffected:   defectType,
+        new_severity:         severity,
+        new_describethedefect: description,
       }
       await client.create(TABLES.defects, body)
       navigate('/')
@@ -83,17 +70,17 @@ export function DefectsPage() {
           What is affected? <span className="text-[#D92D20]">*</span>
         </label>
         <div className="flex flex-wrap gap-2">
-          {DEFECT_TYPES.map(d => (
+          {DEFECT_TYPES.map(label => (
             <button
-              key={d.value} type="button"
-              onClick={() => setDefectType(d.value)}
+              key={label} type="button"
+              onClick={() => setDefectType(label)}
               className={`px-3 py-2 rounded-xl text-[12px] font-bold border-[1.5px] transition-colors ${
-                defectType === d.value
+                defectType === label
                   ? 'bg-navy text-white border-navy'
                   : 'bg-white text-fleet-ink border-fleet-line'
               }`}
             >
-              {d.label}
+              {label}
             </button>
           ))}
         </div>
@@ -105,20 +92,20 @@ export function DefectsPage() {
           How serious? <span className="text-[#D92D20]">*</span>
         </label>
         <div className="space-y-2">
-          {URGENCY.map(u => (
+          {SEVERITY.map(u => (
             <button
               key={u.value} type="button"
-              onClick={() => setUrgency(u.value)}
+              onClick={() => setSeverity(u.value)}
               className={`w-full flex items-center gap-3 p-3 rounded-xl border-[1.5px] text-left transition-colors ${
-                urgency === u.value
+                severity === u.value
                   ? urgencyColors[u.color]
                   : 'bg-white border-fleet-line'
               }`}
             >
               <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                urgency === u.value ? 'border-current' : 'border-fleet-line'
+                severity === u.value ? 'border-current' : 'border-fleet-line'
               }`}>
-                {urgency === u.value && <div className="w-2 h-2 rounded-full bg-current" />}
+                {severity === u.value && <div className="w-2 h-2 rounded-full bg-current" />}
               </div>
               <div>
                 <div className="text-[13px] font-bold">{u.label}</div>

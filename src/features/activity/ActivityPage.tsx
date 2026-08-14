@@ -32,31 +32,30 @@ function mapInspections(records: InspectionRecord[]): ActivityItem[] {
 function mapTrips(records: TripRecord[]): ActivityItem[] {
   return records.map(r => {
     const isClosed = r.statecode === 1
-    const km = r.new_distancekm ? `${r.new_distancekm.toLocaleString()} km` : null
     return {
-      id: r.new_vehicletripid,
-      title: isClosed ? 'Vehicle checked in' : 'Vehicle checked out',
-      sub: km ?? (isClosed ? 'Closed' : 'On trip'),
-      date: new Date(r.new_checkintime ?? r.new_checkouttime ?? Date.now()),
+      id: r.new_checkoutid,
+      title: isClosed ? 'Vehicle returned' : 'Vehicle checked out',
+      sub: r.new_purposeoftrip ?? (isClosed ? 'Returned' : 'On trip'),
+      date: new Date(r.createdon ?? Date.now()),
       icon: 'key',
       color: isClosed ? 'green' : 'blue',
-      result: isClosed ? 'Closed' : 'On trip',
+      result: isClosed ? 'Returned' : 'On trip',
     }
   })
 }
 
 function mapFuel(records: FuelRecord[]): ActivityItem[] {
   return records.map(r => ({
-    id: r.new_fuelentryid,
+    id: r.new_fuelmilageid,
     title: 'Fuel capture',
     sub: [
-      r.new_litres ? `${r.new_litres} L` : null,
-      r.new_totalcost ? `R ${Number(r.new_totalcost).toLocaleString()}` : null,
+      r.new_litresfilled ? `${r.new_litresfilled} L` : null,
+      r.new_totalcostr ? `R ${Number(r.new_totalcostr).toLocaleString()}` : null,
     ].filter(Boolean).join(' · '),
     date: new Date(r.new_date ?? Date.now()),
     icon: 'fuel',
-    color: r.new_approvalstatus === 2 ? 'green' : r.new_approvalstatus === 3 ? 'red' : 'amber',
-    result: r.new_approvalstatus === 2 ? 'Approved' : r.new_approvalstatus === 3 ? 'Rejected' : 'Pending',
+    color: 'amber',
+    result: 'Submitted',
   }))
 }
 
@@ -77,14 +76,15 @@ function mapIncidents(records: IncidentRecord[]): ActivityItem[] {
 }
 
 function mapDefects(records: DefectRecord[]): ActivityItem[] {
-  const parts: Record<number, string> = { 1: 'Engine', 2: 'Transmission', 3: 'Brakes', 4: 'Tyres', 5: 'Lights', 6: 'Body', 7: 'AC', 8: 'Other' }
+  const severityLabel: Record<number, string> = { 100000000: 'Low', 100000001: 'Medium', 100000002: 'High' }
+  const severityColor: Record<number, string> = { 100000000: 'green', 100000001: 'amber', 100000002: 'red' }
   return records.map(r => ({
-    id: r.new_defectid,
+    id: r.new_defectlogid,
     title: 'Defect logged',
-    sub: parts[r.new_defecttype ?? 8] ?? 'Defect',
-    date: new Date(r.new_reportdate ?? Date.now()),
+    sub: [r.new_whatisaffected, r.new_severity ? severityLabel[r.new_severity] : null].filter(Boolean).join(' · '),
+    date: new Date(r.createdon ?? Date.now()),
     icon: 'wrench',
-    color: r.statecode === 1 ? 'green' : 'amber',
+    color: severityColor[r.new_severity ?? 2] ?? 'amber',
     result: r.statecode === 0 ? 'Open' : 'Resolved',
   }))
 }
@@ -157,13 +157,13 @@ export function ActivityPage() {
       client.retrieve<InspectionRecord>(TABLES.inspections,
         `$filter=_new_inspectorrecord_value eq ${id}&$select=new_vehicleinspectionid,new_inspectiondate&$orderby=new_inspectiondate desc&$top=15`),
       client.retrieve<TripRecord>(TABLES.trips,
-        `$filter=_new_driverrecord_value eq ${id}&$select=new_vehicletripid,new_checkouttime,new_checkintime,new_distancekm,statecode&$orderby=new_checkouttime desc&$top=15`),
+        `$select=new_checkoutid,new_purposeoftrip,new_odometerreadingkm,statecode,createdon&$orderby=createdon desc&$top=15`),
       client.retrieve<FuelRecord>(TABLES.fuel,
-        `$filter=_new_driverrecord_value eq ${id}&$select=new_fuelentryid,new_date,new_litres,new_totalcost,new_approvalstatus&$orderby=new_date desc&$top=15`),
+        `$select=new_fuelmilageid,new_date,new_litresfilled,new_totalcostr,new_fuelstation&$orderby=new_date desc&$top=15`),
       client.retrieve<IncidentRecord>(TABLES.incidents,
         `$filter=_new_driverrecord_value eq ${id}&$select=new_vehicleaccidentreportid,new_accidenttitle,new_vehiclestatus,statecode,createdon&$orderby=createdon desc&$top=15`),
       client.retrieve<DefectRecord>(TABLES.defects,
-        `$filter=_new_driverrecord_value eq ${id}&$select=new_defectid,new_reportdate,new_defecttype,new_urgency,statecode&$orderby=new_reportdate desc&$top=15`),
+        `$select=new_defectlogid,new_whatisaffected,new_severity,statecode,createdon&$orderby=createdon desc&$top=15`),
     ])
       .then(([insp, trips, fuel, incidents, defects]) => {
         const all: ActivityItem[] = [

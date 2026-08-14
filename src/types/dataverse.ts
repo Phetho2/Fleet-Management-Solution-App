@@ -76,29 +76,27 @@ export interface ServiceRecord {
 }
 
 export interface TripRecord {
-  new_vehicletripid: string
-  new_checkouttime?: string
-  new_checkintime?: string
-  new_odometerat_checkout?: number
-  new_odometerat_checkin?: number
-  new_distancekm?: number
-  new_purpose?: string
+  new_checkoutid: string
+  new_odometerreadingkm?: number
+  new_purposeoftrip?: string
+  new_expectedreturn?: string    // ISO DateTime
   new_notes?: string
-  statecode?: number
-  _new_driverrecord_value?: string
-  _new_vehiclerecord_value?: string
+  statecode?: number             // 0=Active (on trip), 1=Inactive (returned)
+  statuscode?: number
+  createdon?: string
 }
 
 export interface FuelRecord {
-  new_fuelentryid: string
+  new_fuelmilageid: string
   new_date?: string
-  new_litres?: number
-  new_totalcost?: number
-  new_odometer?: number
-  new_fuelstationname?: string
-  new_approvalstatus?: number    // 1=Pending, 2=Approved, 3=Rejected
-  _new_driverrecord_value?: string
-  _new_vehiclerecord_value?: string
+  new_litresfilled?: number
+  new_totalcostr?: number
+  new_odometerreadingkm?: number
+  new_fuelstation?: string
+  new_vehicle?: string
+  statuscode?: number            // State: 1=Active, 2=Inactive (system field)
+  statecode?: number
+  createdon?: string
 }
 
 export interface IncidentRecord {
@@ -119,14 +117,23 @@ export interface IncidentRecord {
 }
 
 export interface DefectRecord {
-  new_defectid: string
-  new_reportdate?: string
-  new_defecttype?: number
-  new_urgency?: number
-  new_description?: string
+  new_defectlogid: string
+  new_whatisaffected?: string    // String — e.g. "Engine", "Brakes"
+  new_severity?: number          // Picklist: 100000000=Low, 100000001=Medium, 100000002=High
+  new_describethedefect?: string
   statecode?: number
-  _new_driverrecord_value?: string
-  _new_vehiclerecord_value?: string
+  statuscode?: number
+  createdon?: string
+}
+
+export interface CheckinRecord {
+  new_checkinid: string
+  new_checkedout?: string         // ISO DateTime — when driver took the vehicle
+  new_closingodometerkm?: number
+  new_vehicleconditiononreturn?: number  // Picklist — values TBC from Dataverse
+  new_notes?: string
+  statecode?: number
+  createdon?: string
 }
 
 // ── Legacy aliases (keep so existing imports don't break) ──────────────────

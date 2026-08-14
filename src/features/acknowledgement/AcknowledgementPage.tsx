@@ -3,7 +3,6 @@ import { useMsal } from '@azure/msal-react'
 import { createDataverseClient } from '../../api/dataverseClient'
 import { FormShell } from '../../components/FormShell'
 import { SignaturePad } from '../../components/SignaturePad'
-import type { Acknowledgement } from '../../types/dataverse'
 
 const ACK_TYPES = [
   'Vehicle Usage Policy',
@@ -26,7 +25,7 @@ export function AcknowledgementPage() {
     setSubmitting(true); setError(null); setSuccess(null)
     try {
       const client = createDataverseClient(instance)
-      await client.create<Acknowledgement>('new_acknowledgements', {
+      await client.create('new_acknowledgements', {
         new_type: selectedType,
         new_date: new Date().toISOString(),
         new_signaturebase64: signature.split(',')[1]
