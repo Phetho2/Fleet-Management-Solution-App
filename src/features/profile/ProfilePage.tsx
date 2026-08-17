@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { useMsal } from '@azure/msal-react'
+// import { useState } from 'react' // Developer check — uncomment with components below
+// import { useMsal } from '@azure/msal-react' // Developer check — uncomment with components below
 import { useAuth } from '../../auth/useAuth'
 import { useDriver } from '../../context/DriverContext'
-import { createDataverseClient } from '../../api/dataverseClient'
-import { TABLES } from '../../api/tables'
+// import { createDataverseClient } from '../../api/dataverseClient' // Developer check
+// import { TABLES } from '../../api/tables' // Developer check
 
 function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
@@ -41,7 +41,8 @@ function formatDate(iso: string | undefined) {
   return new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-/** Queries Dataverse metadata to show columns for a specific table */
+/* Developer check — uncomment when adding more tables
+
 function ColumnDiscovery() {
   const { instance } = useMsal()
   const [table, setTable]     = useState('new_driver')
@@ -127,7 +128,6 @@ function ColumnDiscovery() {
   )
 }
 
-/** Queries Dataverse ManyToOne relationships to find the correct @odata.bind navigation property names */
 function RelationshipDiscovery() {
   const { instance } = useMsal()
   const [table, setTable]     = useState('new_vehicleinspection')
@@ -206,7 +206,6 @@ function RelationshipDiscovery() {
   )
 }
 
-/** Queries Dataverse metadata to show the real entity set names for all bwl_ tables */
 function TableDiscovery() {
   const { instance } = useMsal()
   const [results, setResults] = useState<Array<{ logical: string; entitySet: string }> | null>(null)
@@ -323,6 +322,8 @@ function TableDiscovery() {
   )
 }
 
+*/ // end Developer check
+
 export function ProfilePage() {
   const { account, logout } = useAuth()
   const { driver, vehicle, lastService } = useDriver()
@@ -379,11 +380,11 @@ export function ProfilePage() {
 
         {/* Licence — fields not yet in Dataverse table, shown as placeholders */}
         <div>
-          <div className="text-[10.5px] font-extrabold tracking-[1.1px] uppercase text-fleet-ink-3 mb-2">Licence</div>
-          <div className="bg-white border-[1.5px] border-fleet-line rounded-[13px] px-4">
+          {/* <div className="text-[10.5px] font-extrabold tracking-[1.1px] uppercase text-fleet-ink-3 mb-2">Licence</div> */}
+          {/* <div className="bg-white border-[1.5px] border-fleet-line rounded-[13px] px-4">
             <Row label="Licence no." value="—" mono />
             <Row label="Expires" value="—" />
-          </div>
+          </div> */}
         </div>
 
         {/* Vehicle details */}
@@ -402,14 +403,11 @@ export function ProfilePage() {
           </div>
         )}
 
-        {/* Table discovery tool */}
+        {/* Developer check — uncomment when adding more tables
         <TableDiscovery />
-
-        {/* Column discovery tool */}
         <ColumnDiscovery />
-
-        {/* Relationship / navigation property discovery */}
         <RelationshipDiscovery />
+        */}
 
         {/* Sign out */}
         <button
