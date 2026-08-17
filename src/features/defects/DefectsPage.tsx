@@ -19,7 +19,7 @@ const SEVERITY = [
 
 export function DefectsPage() {
   const { instance } = useMsal()
-  const { driver, vehicle } = useDriver()
+  const { vehicle } = useDriver()
   const navigate = useNavigate()
 
   const [defectType, setDefectType] = useState('Other')

@@ -77,7 +77,7 @@ function mapIncidents(records: IncidentRecord[]): ActivityItem[] {
 
 function mapDefects(records: DefectRecord[]): ActivityItem[] {
   const severityLabel: Record<number, string> = { 100000000: 'Low', 100000001: 'Medium', 100000002: 'High' }
-  const severityColor: Record<number, string> = { 100000000: 'green', 100000001: 'amber', 100000002: 'red' }
+  const severityColor: Record<number, ActivityColor> = { 100000000: 'green', 100000001: 'amber', 100000002: 'red' }
   return records.map(r => ({
     id: r.new_defectlogid,
     title: 'Defect logged',
