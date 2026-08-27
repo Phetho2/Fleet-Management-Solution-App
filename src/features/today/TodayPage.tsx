@@ -125,9 +125,9 @@ export function TodayPage() {
 
   // Derive checklist state from shift
   const inspected  = shift !== 'not-started'
-  const checkedIn  = ['checked-in', 'on-trip', 'returned'].includes(shift)
+  const signedIn   = ['checked-in', 'on-trip', 'returned'].includes(shift)
   const checkedOut = shift === 'on-trip' || shift === 'returned'
-  const returned   = shift === 'returned'
+  const checkedIn  = shift === 'returned'
 
   const done = (v: boolean) => <Pill color={v ? 'green' : 'amber'}>{v ? 'Done' : 'To do'}</Pill>
 
@@ -139,8 +139,8 @@ export function TodayPage() {
     Promise.allSettled([
       // 1. Inspection submitted today by this driver
       client.retrieve<InspectionRecord>(TABLES.inspections,
-        `$filter=_new_inspectorrecord_value eq ${driver.new_driverid} and createdon ge ${iso}` +
-        `&$select=new_vehicleinspectionid&$top=1`),
+        `$filter=_new_driver_value eq ${driver.new_driverid} and createdon ge ${iso}` +
+        `&$select=new_dailyinspectionid&$top=1`),
 
       // 2. Check-in record from today (most recent)
       client.retrieve<CheckinRecord>(TABLES.checkins,
@@ -222,11 +222,11 @@ export function TodayPage() {
           />
           <TaskItem
             icon={<IconKey />}
-            title="Check in to vehicle"
+            title="Sign in to vehicle"
             sub="Sign in before your trip"
-            tag={done(checkedIn)}
+            tag={done(signedIn)}
             loading={syncing}
-            onClick={() => inspected && !checkedIn ? navigate('/checkin') : undefined}
+            onClick={() => inspected && !signedIn ? navigate('/checkin') : undefined}
           />
           <TaskItem
             icon={<IconKey />}
@@ -234,7 +234,7 @@ export function TodayPage() {
             sub="Log odometer and trip purpose"
             tag={done(checkedOut)}
             loading={syncing}
-            onClick={() => checkedIn && !checkedOut ? navigate('/checkinout') : undefined}
+            onClick={() => signedIn && !checkedOut ? navigate('/checkinout') : undefined}
           />
         </div>
 
@@ -287,9 +287,9 @@ export function TodayPage() {
         <div className="space-y-2">
           <TaskItem
             icon={<IconKey />}
-            title="Return vehicle"
-            sub={returned ? 'Vehicle returned · shift closed' : 'Close odometer & condition on return'}
-            tag={done(returned)}
+            title="Check in vehicle"
+            sub={checkedIn ? 'Checked in · shift closed' : 'Close odometer & condition at check-in'}
+            tag={done(checkedIn)}
             loading={syncing}
             onClick={() => shift === 'on-trip' ? navigate('/checkinout') : undefined}
           />

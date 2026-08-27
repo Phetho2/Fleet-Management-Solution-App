@@ -180,17 +180,17 @@ export function DashboardPage() {
   const shiftPill = {
     'not-started': <Pill color="gray">Shift not started</Pill>,
     'inspected':   <Pill color="blue">Inspection done</Pill>,
-    'checked-in':  <Pill color="blue">Checked in</Pill>,
+    'checked-in':  <Pill color="blue">Signed in</Pill>,
     'on-trip':     <Pill color="green">On trip</Pill>,
     'returned':    <Pill color="gray">Shift complete</Pill>,
   }[shift]
 
   const shiftAlert = {
-    'not-started': <Alert type="warn">Complete your daily inspection before you can check in.</Alert>,
-    'inspected':   <Alert type="info">Inspection done. Check in to the vehicle to start your shift.</Alert>,
-    'checked-in':  <Alert type="ok">Checked in. Log your odometer and purpose of trip to check out.</Alert>,
-    'on-trip':     <Alert type="info">Vehicle checked out at {odoOut ? `${Number(odoOut).toLocaleString()} km` : '—'}. Tap <strong>Return vehicle</strong> when you are back.</Alert>,
-    'returned':    <Alert type="ok">Vehicle returned. Your trip record has been closed — well done.</Alert>,
+    'not-started': <Alert type="warn">Complete your daily inspection before you can sign in.</Alert>,
+    'inspected':   <Alert type="info">Inspection done. Sign in to the vehicle to start your shift.</Alert>,
+    'checked-in':  <Alert type="ok">Signed in. Log your odometer and purpose of trip to check out.</Alert>,
+    'on-trip':     <Alert type="info">Vehicle checked out at {odoOut ? `${Number(odoOut).toLocaleString()} km` : '—'}. Tap <strong>Check in</strong> when you are back.</Alert>,
+    'returned':    <Alert type="ok">Checked in. Your trip record has been closed — well done.</Alert>,
   }[shift]
 
   return (
@@ -252,26 +252,26 @@ export function DashboardPage() {
             onClick={() => navigate('/inspection')}
           />
 
-          {/* Check-in */}
+          {/* Sign-in */}
           <Tile
             icon={<IconKey />}
-            title="Check in"
+            title="Sign in"
             sub={
               shift === 'not-started'  ? 'Inspection first' :
               shift === 'inspected'    ? 'Sign in to vehicle' :
-              'Checked in'
+              'Signed in'
             }
             done={['checked-in', 'on-trip', 'returned'].includes(shift)}
             disabled={shift === 'not-started'}
             onClick={() => navigate('/checkin')}
           />
 
-          {/* Check-out / Return vehicle */}
+          {/* Check-out / Check-in vehicle */}
           {shift === 'on-trip' ? (
             <Tile
               icon={<IconKey />}
-              title="Return vehicle"
-              sub="Mark vehicle as returned"
+              title="Check in"
+              sub="Log closing odometer & condition"
               onClick={() => navigate('/checkinout')}
             />
           ) : (
@@ -280,8 +280,8 @@ export function DashboardPage() {
               title="Check out"
               sub={
                 shift === 'checked-in' ? 'Log odometer & purpose' :
-                shift === 'returned'   ? 'Vehicle returned' :
-                'Check in first'
+                shift === 'returned'   ? 'Checked in' :
+                'Sign in first'
               }
               done={shift === 'returned'}
               disabled={shift !== 'checked-in'}

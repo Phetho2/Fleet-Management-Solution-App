@@ -136,10 +136,10 @@ export function CheckInOutPage() {
 
   return (
     <FormShell
-      title={isReturn ? 'Return Vehicle' : 'Check Out Vehicle'}
+      title={isReturn ? 'Check In Vehicle' : 'Check Out Vehicle'}
       subtitle={vehicle ? `${vehicle.new_vehicletitle} · ${vehicle.new_registrationnumber}` : 'Your vehicle'}
       onSubmit={handleSubmit}
-      submitLabel={isReturn ? 'Return vehicle' : 'Check out'}
+      submitLabel={isReturn ? 'Check in' : 'Check out'}
       submitting={submitting}
       error={error}
     >
@@ -173,7 +173,7 @@ export function CheckInOutPage() {
       {isReturn && (
         <div>
           <label className="block text-[11.5px] font-bold text-navy mb-2">
-            Vehicle condition on return <span className="text-[#D92D20]">*</span>
+            Vehicle condition at check-in <span className="text-[#D92D20]">*</span>
           </label>
           <div className="space-y-2">
             {CONDITIONS.map(c => (
@@ -247,9 +247,9 @@ export function CheckInOutPage() {
 
       {/* Photos */}
       <PhotoField
-        label={isReturn ? 'Photos on return' : 'Photos on checkout'}
+        label={isReturn ? 'Photos at check-in' : 'Photos on checkout'}
         hint={isReturn
-          ? 'Optional — photograph any new damage or issues found on return'
+          ? 'Optional — photograph any new damage or issues found at check-in'
           : 'Optional — photograph the vehicle condition before you drive off'}
         photos={photos}
         onAdd={() => setShowCamera(true)}

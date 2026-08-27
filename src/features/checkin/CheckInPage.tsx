@@ -70,10 +70,10 @@ export function CheckInPage() {
 
   return (
     <FormShell
-      title="Check In"
+      title="Sign In"
       subtitle={vehicle ? `${vehicle.new_vehicletitle} · ${vehicle.new_registrationnumber}` : 'Your vehicle'}
       onSubmit={handleSubmit}
-      submitLabel="Check in"
+      submitLabel="Sign in"
       submitting={submitting}
       error={error}
     >
