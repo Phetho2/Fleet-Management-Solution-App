@@ -128,7 +128,7 @@ function ColumnDiscovery() {
 
 function RelationshipDiscovery() {
   const { instance } = useMsal()
-  const [table, setTable]     = useState('new_vehicleinspection')
+  const [table, setTable]     = useState('new_dailyinspection')
   const [results, setResults] = useState<Array<{ attr: string; target: string; navProp: string }> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
@@ -207,6 +207,83 @@ function RelationshipDiscovery() {
   )
 }
 
+function PicklistDiscovery() {
+  const { instance } = useMsal()
+  const [table, setTable]     = useState('new_dailyinspection')
+  const [attr, setAttr]       = useState('new_exteriorcondition')
+  const [results, setResults] = useState<Array<{ value: number; label: string }> | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
+  const [open, setOpen]       = useState(false)
+
+  const discover = async () => {
+    setLoading(true); setError(null); setResults(null)
+    try {
+      const client = createDataverseClient(instance)
+      const res = await client.discoverPicklistOptions(table, attr)
+      setResults(
+        (res.OptionSet?.Options ?? []).map(o => ({
+          value: o.Value,
+          label: o.Label.UserLocalizedLabel?.Label ?? String(o.Value),
+        }))
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Discovery failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="text-[10.5px] font-extrabold tracking-[1.1px] uppercase text-fleet-ink-3 mb-2">
+        Developer · Picklist values
+      </div>
+      <div className="bg-white border-[1.5px] border-fleet-line rounded-[13px] overflow-hidden">
+        <button onClick={() => setOpen(o => !o)}
+          className="w-full flex items-center justify-between p-4 text-left">
+          <div>
+            <div className="font-bold text-[14px] text-fleet-ink">Discover picklist option values</div>
+            <div className="text-[11.5px] text-fleet-ink-3 mt-0.5">Find the numeric codes behind a Picklist column</div>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+            className={`text-fleet-ink-3 transition-transform ${open ? 'rotate-90' : ''}`}>
+            <path d="M5 12h14M13 6l6 6-6 6"/>
+          </svg>
+        </button>
+        {open && (
+          <div className="border-t border-[#EEF2F7] p-4 space-y-3">
+            <div className="flex gap-2">
+              <input value={table} onChange={e => setTable(e.target.value)}
+                placeholder="Table logical name"
+                className="flex-1 border border-fleet-line rounded-lg px-3 py-2 text-[12px] font-mono" />
+              <input value={attr} onChange={e => setAttr(e.target.value)}
+                placeholder="Column logical name"
+                className="flex-1 border border-fleet-line rounded-lg px-3 py-2 text-[12px] font-mono" />
+              <button onClick={discover}
+                className="px-4 py-2 bg-navy text-white rounded-lg text-[12px] font-bold shrink-0">
+                {loading ? '…' : 'Go'}
+              </button>
+            </div>
+            {error && <div className="text-[12px] text-[#C42D3A] font-semibold">{error}</div>}
+            {results && (
+              <div className="space-y-1 max-h-80 overflow-y-auto">
+                {results.map(r => (
+                  <div key={r.value} className="flex items-baseline justify-between gap-2 py-1.5 border-b border-[#EEF2F7]">
+                    <span className="font-mono text-[12px] font-bold text-navy">{r.value}</span>
+                    <span className="text-[12px] text-fleet-ink-3">{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function TableDiscovery() {
   const { instance } = useMsal()
   const [results, setResults] = useState<Array<{ logical: string; entitySet: string }> | null>(null)
@@ -234,7 +311,7 @@ function TableDiscovery() {
   const configured: Record<string, string> = {
     new_driver:                 TABLES.drivers,
     new_vehiclerecord:          TABLES.vehicles,
-    new_vehicleinspection:      TABLES.inspections,
+    new_dailyinspection:        TABLES.inspections,
     new_vehicleaccidentreport:  TABLES.incidents,
     new_vehicleservicerecord:   TABLES.services,
   }
@@ -405,6 +482,7 @@ export function ProfilePage() {
         <TableDiscovery />
         <ColumnDiscovery />
         <RelationshipDiscovery />
+        <PicklistDiscovery />
 
         {/* Sign out */}
         <button

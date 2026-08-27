@@ -72,15 +72,51 @@ function YesNo({
   )
 }
 
+/** Pill-style single-choice picker for Picklist columns */
+function ChoicePicker({ value, onChange, options }: {
+  value: number | ''
+  onChange: (v: number) => void
+  options: Array<{ value: number; label: string }>
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map(o => (
+        <button key={o.value} type="button" onClick={() => onChange(o.value)}
+          className={`px-3 py-2 rounded-xl text-[12px] font-bold border-[1.5px] transition-colors ${
+            value === o.value ? 'bg-navy text-white border-navy' : 'bg-white text-fleet-ink border-fleet-line'
+          }`}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /* ── Step definitions ─────────────────────────────────────── */
 const STEPS = ['Location & odometer', 'Condition checks', 'Cleanliness & lights', 'Confirm & sign']
 
+// Picklist option values below are placeholder guesses (following this project's
+// convention for custom local option sets). Verify/replace via Profile →
+// "Discover picklist option values" against new_dailyinspection before relying on them.
 const INSPECTION_TITLES = [
-  'Pre-Trip Inspection',
-  'Post-Trip Inspection',
-  'Morning Inspection',
-  'End-of-Day Inspection',
-  'Weekly Inspection',
+  { value: 100000000, label: 'Pre-Trip Inspection' },
+  { value: 100000001, label: 'Post-Trip Inspection' },
+  { value: 100000002, label: 'Morning Inspection' },
+  { value: 100000003, label: 'End-of-Day Inspection' },
+  { value: 100000004, label: 'Weekly Inspection' },
+]
+
+const CONDITION_OPTIONS = [
+  { value: 100000000, label: 'Good' },
+  { value: 100000001, label: 'Fair' },
+  { value: 100000002, label: 'Poor' },
+]
+
+const SITE_LOCATIONS = [
+  { value: 100000000, label: 'Head Office' },
+  { value: 100000001, label: 'Depot' },
+  { value: 100000002, label: 'Client Site' },
+  { value: 100000003, label: 'Other' },
 ]
 
 export function InspectionPage() {
@@ -92,16 +128,14 @@ export function InspectionPage() {
   const [step, setStep] = useState(0)
 
   // Step 0 — title, location & odometer
-  const [title, setTitle]             = useState('')
-  const [site, setSite]               = useState('')
-  const [street, setStreet]           = useState('')
-  const [city, setCity]               = useState('')
+  const [title, setTitle]             = useState<number | ''>('')
+  const [site, setSite]               = useState<number | ''>('')
   const [odometer, setOdometer]       = useState('')
   const [nextServiceOdo, setNextSvcOdo] = useState('')
 
   // Step 1 — condition checks
-  const [exteriorcondition, setExterior]      = useState('')
-  const [interiorcondition, setInterior]      = useState('')
+  const [exteriorcondition, setExterior]      = useState<number | ''>('')
+  const [interiorcondition, setInterior]      = useState<number | ''>('')
   const [interiorComments, setInteriorComments] = useState('')
   const [isneat, setNeat]                     = useState<boolean | undefined>()
 
@@ -110,7 +144,6 @@ export function InspectionPage() {
   const [cleanComment, setCleanComment]     = useState('')
   const [lastwashdate, setWashDate]         = useState('')
   const [mirrorsWorking, setMirrors]        = useState<boolean | undefined>()
-  const [mirrorsComment, setMirrorsComment] = useState('')
   const [headlightsWorking, setHeadlights]  = useState<boolean | undefined>()
 
   const [submitting, setSubmitting] = useState(false)
@@ -121,7 +154,7 @@ export function InspectionPage() {
 const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
 
   const validateStep = () => {
-    if (step === 0 && !title.trim()) { setError('Inspection title is required.'); return false }
+    if (step === 0 && !title) { setError('Inspection title is required.'); return false }
     if (step === 0 && !odometer) { setError('Odometer reading is required.'); return false }
     if (step === 1 && isneat === undefined) {
       setError('Please answer all condition checks.'); return false
@@ -144,33 +177,30 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
     setSubmitting(true); setError(null)
     try {
       const client = createDataverseClient(instance)
-      const now = new Date()
 
       const body: Record<string, unknown> = {
-        new_inspectiontitle:             title.trim(),
-        new_inspectiondate:              now.toISOString(),
-        new_odometerreading:             odometer ? Number(odometer) : undefined,
-        new_nextserviceodometer:         nextServiceOdo ? Number(nextServiceOdo) : undefined,
-        new_sitelocation:                site || undefined,
-        new_streetaddress:               street || undefined,
-        new_city:                        city || undefined,
-        new_exteriorcondition:           exteriorcondition || undefined,
-        new_interiorcondition:           interiorcondition || undefined,
-        new_interiorconditioncomments:   interiorComments || undefined,
-        new_neatcondition:               isneat,
-        new_interiorcleanliness:         isInteriorClean,
-        new_interiorcleanlinesscomments: cleanComment || undefined,
-        new_lastwashdate:                lastwashdate
-                                           ? new Date(lastwashdate + 'T00:00:00').toISOString()
-                                           : undefined,
-        new_mirrorsworking:              mirrorsWorking,
-        new_mirrorsworkingcomments:      mirrorsComment || undefined,
-        new_headlightsworking:           headlightsWorking,
-        new_inspectorname:               driver.new_driverfullname,
-        new_registrationnumber:          vehicle?.new_registrationnumber ?? undefined,
-        new_vehiclemake:                 vehicle?.new_vehiclemake ?? undefined,
-        'new_InspectorRecord@odata.bind': `/new_drivers(${driver.new_driverid})`,
-        ...(vehicle ? { 'new_VehicleRecord@odata.bind': `/new_vehiclerecords(${vehicle.new_vehiclerecordid})` } : {}),
+        new_inspectiontitle:                title || undefined,
+        new_currentodometerreadingkm:       odometer ? Number(odometer) : undefined,
+        new_nextserviceodometerreadingkm:   nextServiceOdo ? Number(nextServiceOdo) : undefined,
+        new_sitelocationname:               site || undefined,
+        new_exteriorcondition:              exteriorcondition || undefined,
+        new_interiorcondition:              interiorcondition || undefined,
+        new_interiorconditioncomments:      interiorComments || undefined,
+        new_isthevehicleinneatcondition:    isneat,
+        new_istheinteriorofthevehicleclean: isInteriorClean,
+        new_whatneedscleaning:              cleanComment || undefined,
+        new_lastwashdate:                   lastwashdate
+                                              ? new Date(lastwashdate + 'T00:00:00').toISOString()
+                                              : undefined,
+        new_areallmirrorsworking:           mirrorsWorking,
+        new_areheadlightsworking:           headlightsWorking,
+        new_drivername:                     driver.new_driverfullname,
+        new_vehiclename:                    vehicle?.new_vehicletitle ?? undefined,
+        // Nav property names below are guessed from this project's existing lookup
+        // conventions — verify via Profile → "Discover @odata.bind names" for
+        // new_dailyinspection and fix if the create call 400s.
+        'new_Driver@odata.bind':             `/new_drivers(${driver.new_driverid})`,
+        ...(vehicle ? { 'new_Vehicle@odata.bind': `/new_vehiclerecords(${vehicle.new_vehiclerecordid})` } : {}),
       }
       await client.create(TABLES.inspections, body)
       setShift(result === 1 ? 'inspected' : 'not-started')
@@ -198,31 +228,21 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
       </div>
 
       <Field label="Inspection title" required>
-        <select value={title} onChange={e => setTitle(e.target.value)}
+        <select value={title} onChange={e => setTitle(Number(e.target.value))}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm bg-white focus:border-fleet-blue focus:outline-none appearance-none">
           <option value="" disabled>Select inspection type…</option>
-          {INSPECTION_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+          {INSPECTION_TITLES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
       </Field>
 
       <SectionLabel>Location</SectionLabel>
       <Field label="Site / Location name">
-        <input type="text" value={site} onChange={e => setSite(e.target.value)}
-          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
-          placeholder="e.g. Midrand Depot" />
+        <select value={site} onChange={e => setSite(Number(e.target.value))}
+          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm bg-white focus:border-fleet-blue focus:outline-none appearance-none">
+          <option value="" disabled>Select a location…</option>
+          {SITE_LOCATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Street">
-          <input type="text" value={street} onChange={e => setStreet(e.target.value)}
-            className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
-            placeholder="Street address" />
-        </Field>
-        <Field label="City">
-          <input type="text" value={city} onChange={e => setCity(e.target.value)}
-            className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
-            placeholder="City" />
-        </Field>
-      </div>
 
       <SectionLabel>Odometer</SectionLabel>
       <Field label="Current odometer reading (km)" required>
@@ -245,16 +265,12 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
 
       <SectionLabel>Exterior</SectionLabel>
       <Field label="Exterior condition">
-        <input type="text" value={exteriorcondition} onChange={e => setExterior(e.target.value)}
-          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
-          placeholder="e.g. Minor stone chips on bonnet, dented rear bumper" />
+        <ChoicePicker value={exteriorcondition} onChange={setExterior} options={CONDITION_OPTIONS} />
       </Field>
 
       <SectionLabel>Interior</SectionLabel>
       <Field label="Interior condition">
-        <input type="text" value={interiorcondition} onChange={e => setInterior(e.target.value)}
-          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
-          placeholder="e.g. Good, needs a wash, slight scratches" />
+        <ChoicePicker value={interiorcondition} onChange={setInterior} options={CONDITION_OPTIONS} />
       </Field>
       <Field label="Interior condition comments">
         <textarea rows={2} value={interiorComments} onChange={e => setInteriorComments(e.target.value)}
@@ -284,11 +300,7 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
       </Field>
 
       <SectionLabel>Lights & mirrors</SectionLabel>
-      <YesNo label="Are all mirrors working?"
-        value={mirrorsWorking} onChange={setMirrors}
-        comment={mirrorsComment} onComment={setMirrorsComment}
-        commentLabel="Which mirror is faulty?" />
-
+      <YesNo label="Are all mirrors working?" value={mirrorsWorking} onChange={setMirrors} />
       <YesNo label="Are headlights working?" value={headlightsWorking} onChange={setHeadlights} />
     </FormShell>
   )
@@ -324,7 +336,9 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
         {[
           ['Vehicle', vehicle ? `${vehicle.new_vehiclemake} ${vehicle.new_vehiclemodel} · ${vehicle.new_registrationnumber}` : '—'],
           ['Odometer', odometer ? `${Number(odometer).toLocaleString()} km` : '—'],
-          ['Location', [site, city].filter(Boolean).join(', ') || '—'],
+          ['Location', SITE_LOCATIONS.find(s => s.value === site)?.label ?? '—'],
+          ['Exterior', CONDITION_OPTIONS.find(c => c.value === exteriorcondition)?.label ?? '—'],
+          ['Interior', CONDITION_OPTIONS.find(c => c.value === interiorcondition)?.label ?? '—'],
           ['Neat', isneat ? 'Yes' : 'No'],
           ['Interior clean', isInteriorClean ? 'Yes' : 'No'],
           ['Mirrors', mirrorsWorking ? 'OK' : 'Faulty'],

@@ -27,35 +27,32 @@ export interface VehicleRecord {
 }
 
 export interface InspectionRecord {
-  new_vehicleinspectionid: string
-  new_inspectiontitle?: string
-  new_inspectiondate?: string
-  new_odometerreading?: number
-  new_nextserviceodometer?: number
+  new_dailyinspectionid: string
+  new_inspectiontitle?: number             // Picklist — values TBC from Dataverse
+  new_currentodometerreadingkm?: number
+  new_nextserviceodometerreadingkm?: number
 
   // Location
-  new_sitelocation?: string
-  new_streetaddress?: string
-  new_city?: string
-  new_state?: string
-  new_countryorregion?: string
-  new_postalcode?: string
+  new_sitelocationname?: number            // Picklist — values TBC from Dataverse
 
   // Condition checks
-  new_roadworthinesscomments?: string   // roadworthy comment (no boolean in table)
-  new_neatcondition?: boolean
-  new_interiorcleanliness?: boolean
-  new_interiorcleanlinesscomments?: string
-  new_lastwashdate?: string
-  new_mirrorsworking?: boolean
-  new_mirrorsworkingcomments?: string
-  new_headlightsworking?: boolean
-  new_interiorcondition?: string
+  new_exteriorcondition?: number           // Picklist — values TBC from Dataverse
+  new_interiorcondition?: number           // Picklist — values TBC from Dataverse
   new_interiorconditioncomments?: string
-  new_exteriorcondition?: string
+  new_isthevehicleinneatcondition?: boolean
+  new_istheinteriorofthevehicleclean?: boolean
+  new_whatneedscleaning?: string
+  new_lastwashdate?: string
+  new_areallmirrorsworking?: boolean
+  new_areheadlightsworking?: boolean
 
-  _new_inspectorrecord_value?: string
-  _new_vehiclerecord_value?: string
+  new_drivername?: string
+  new_vehiclename?: string
+
+  statecode?: number
+  createdon?: string
+  _new_driver_value?: string
+  _new_vehicle_value?: string
 }
 
 export interface ServiceRecord {

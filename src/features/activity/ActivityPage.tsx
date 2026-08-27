@@ -19,10 +19,10 @@ interface ActivityItem {
 
 function mapInspections(records: InspectionRecord[]): ActivityItem[] {
   return records.map(r => ({
-    id: r.new_vehicleinspectionid,
+    id: r.new_dailyinspectionid,
     title: 'Daily inspection',
     sub: 'Submitted',
-    date: new Date(r.new_inspectiondate ?? Date.now()),
+    date: new Date(r.createdon ?? Date.now()),
     icon: 'clip',
     color: 'green',
     result: 'Submitted',
@@ -155,7 +155,7 @@ export function ActivityPage() {
 
     Promise.allSettled([
       client.retrieve<InspectionRecord>(TABLES.inspections,
-        `$filter=_new_inspectorrecord_value eq ${id}&$select=new_vehicleinspectionid,new_inspectiondate&$orderby=new_inspectiondate desc&$top=15`),
+        `$filter=_new_driver_value eq ${id}&$select=new_dailyinspectionid,createdon&$orderby=createdon desc&$top=15`),
       client.retrieve<TripRecord>(TABLES.trips,
         `$select=new_checkoutid,new_purposeoftrip,new_odometerreadingkm,statecode,createdon&$orderby=createdon desc&$top=15`),
       client.retrieve<FuelRecord>(TABLES.fuel,

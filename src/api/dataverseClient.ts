@@ -134,5 +134,13 @@ export function createDataverseClient(instance: IPublicClientApplication) {
         'GET',
         `EntityDefinitions(LogicalName='${tableLogicalName}')/ManyToOneRelationships?$select=ReferencingAttribute,ReferencedEntity,ReferencingEntityNavigationPropertyName`
       ),
+
+    /** Returns the numeric value/label pairs behind a Picklist (option set) column. */
+    discoverPicklistOptions: (tableLogicalName: string, attributeLogicalName: string) =>
+      request<{ OptionSet?: { Options: Array<{ Value: number; Label: { UserLocalizedLabel?: { Label: string } } }> } }>(
+        instance,
+        'GET',
+        `EntityDefinitions(LogicalName='${tableLogicalName}')/Attributes(LogicalName='${attributeLogicalName}')/Microsoft.Dynamics.CRM.PicklistAttributeMetadata?$select=LogicalName&$expand=OptionSet($select=Options)`
+      ),
   }
 }
