@@ -109,9 +109,9 @@ function LoginScreen() {
         </div>
         <div className="text-[22px] font-extrabold tracking-tight">Brilliware</div>
         <div className="text-[10px] font-bold tracking-[2px] text-[#F5B301]">IDEATE · CREATE · INNOVATE</div>
-        <h1 className="text-3xl font-bold tracking-tight mt-2">Brilliware Fleet</h1>
+        <h1 className="text-3xl font-bold tracking-tight mt-2">G-Fleet</h1>
         <p className="text-[#9FB4DA] text-sm leading-relaxed">
-          Sign in with your Monabo work account<br />to start your shift.
+          Sign in with your G-Fleet work account<br />to start your shift.
         </p>
       </div>
 
