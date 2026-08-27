@@ -194,11 +194,9 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
                                               : undefined,
         new_areallmirrorsworking:           mirrorsWorking,
         new_areheadlightsworking:           headlightsWorking,
-        new_drivername:                     driver.new_driverfullname,
-        new_vehiclename:                    vehicle?.new_vehicletitle ?? undefined,
-        // Nav property names below are guessed from this project's existing lookup
-        // conventions — verify via Profile → "Discover @odata.bind names" for
-        // new_dailyinspection and fix if the create call 400s.
+        // new_drivername / new_vehiclename are read-only lookup-name companion
+        // columns (same pattern as ownerid/owneridname) — Dataverse populates
+        // them automatically from the bound lookups below, they can't be set directly.
         'new_Driver@odata.bind':             `/new_drivers(${driver.new_driverid})`,
         ...(vehicle ? { 'new_Vehicle@odata.bind': `/new_vehiclerecords(${vehicle.new_vehiclerecordid})` } : {}),
       }
