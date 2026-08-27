@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { createDataverseClient } from '../../api/dataverseClient'
-import { TABLES } from '../../api/tables'
+import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
+import { CameraCapture } from '../../components/CameraCapture'
+import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
 import { useShift } from '../../context/ShiftContext'
 import type { TripRecord } from '../../types/dataverse'
@@ -29,6 +31,8 @@ export function CheckInOutPage() {
   const [expectedReturn, setExpectedReturn] = useState('')
   const [notes, setNotes]         = useState('')
   const [openTripId, setOpenTripId] = useState<string | null>(null)
+  const [showCamera, setShowCamera] = useState(false)
+  const [photos, setPhotos]       = useState<CapturedPhoto[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
@@ -72,6 +76,15 @@ export function CheckInOutPage() {
             new_vehicleconditiononreturn: condition,
             new_notes:                   notes || undefined,
           })
+          if (photos.length) {
+            try {
+              await Promise.all(
+                photos.map((p, i) => client.uploadPhoto(TABLES.checkins, ENTITY_LOGICAL.checkins, checkinId, p.blob, i))
+              )
+            } catch {
+              // Record already saved — don't block on photo upload failures
+            }
+          }
         }
         // Deactivate the checkout record
         if (openTripId) {
@@ -88,7 +101,16 @@ export function CheckInOutPage() {
         if (expectedReturn) {
           body['new_expectedreturn'] = new Date(expectedReturn).toISOString()
         }
-        await client.create(TABLES.trips, body)
+        const id = await client.create(TABLES.trips, body)
+        if (id && photos.length) {
+          try {
+            await Promise.all(
+              photos.map((p, i) => client.uploadPhoto(TABLES.trips, ENTITY_LOGICAL.trips, id, p.blob, i))
+            )
+          } catch {
+            // Record already saved — don't block on photo upload failures
+          }
+        }
         setOdoOut(odometer)
         setShift('on-trip')
       }
@@ -98,6 +120,18 @@ export function CheckInOutPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (showCamera) {
+    return (
+      <CameraCapture
+        onCapture={blob => {
+          setPhotos(p => [...p, { blob, preview: URL.createObjectURL(blob) }])
+          setShowCamera(false)
+        }}
+        onClose={() => setShowCamera(false)}
+      />
+    )
   }
 
   return (
@@ -210,6 +244,17 @@ export function CheckInOutPage() {
           placeholder="Optional"
         />
       </div>
+
+      {/* Photos */}
+      <PhotoField
+        label={isReturn ? 'Photos on return' : 'Photos on checkout'}
+        hint={isReturn
+          ? 'Optional — photograph any new damage or issues found on return'
+          : 'Optional — photograph the vehicle condition before you drive off'}
+        photos={photos}
+        onAdd={() => setShowCamera(true)}
+        onRemove={i => setPhotos(p => p.filter((_, idx) => idx !== i))}
+      />
     </FormShell>
   )
 }

@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { createDataverseClient } from '../../api/dataverseClient'
-import { TABLES } from '../../api/tables'
+import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
+import { CameraCapture } from '../../components/CameraCapture'
+import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
 import { useShift } from '../../context/ShiftContext'
 
@@ -14,6 +16,8 @@ export function CheckInPage() {
   const navigate = useNavigate()
 
   const [notes, setNotes]         = useState('')
+  const [showCamera, setShowCamera] = useState(false)
+  const [photos, setPhotos]       = useState<CapturedPhoto[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
@@ -31,7 +35,18 @@ export function CheckInPage() {
       }
       const id = await client.create(TABLES.checkins, body)
       // Store the checkin record ID so the return flow can PATCH it
-      if (id) setCheckinId(id)
+      if (id) {
+        setCheckinId(id)
+        if (photos.length) {
+          try {
+            await Promise.all(
+              photos.map((p, i) => client.uploadPhoto(TABLES.checkins, ENTITY_LOGICAL.checkins, id, p.blob, i))
+            )
+          } catch {
+            // Record already saved — don't block on photo upload failures
+          }
+        }
+      }
       setShift('checked-in')
       navigate('/')
     } catch (err) {
@@ -39,6 +54,18 @@ export function CheckInPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (showCamera) {
+    return (
+      <CameraCapture
+        onCapture={blob => {
+          setPhotos(p => [...p, { blob, preview: URL.createObjectURL(blob) }])
+          setShowCamera(false)
+        }}
+        onClose={() => setShowCamera(false)}
+      />
+    )
   }
 
   return (
@@ -66,6 +93,15 @@ export function CheckInPage() {
           placeholder="Optional — anything to flag before your shift?"
         />
       </div>
+
+      {/* Photos */}
+      <PhotoField
+        label="Vehicle condition photos"
+        hint="Optional — photograph any existing damage or issues before you sign in"
+        photos={photos}
+        onAdd={() => setShowCamera(true)}
+        onRemove={i => setPhotos(p => p.filter((_, idx) => idx !== i))}
+      />
     </FormShell>
   )
 }

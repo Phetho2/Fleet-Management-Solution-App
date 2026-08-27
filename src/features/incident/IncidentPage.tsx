@@ -61,7 +61,7 @@ export function IncidentPage() {
   const [injuries, setInjuries]                 = useState(false)
   const [thirdParty, setThirdParty]             = useState(false)
   const [thirdPartyName, setThirdPartyName]     = useState('')
-  const [thirdPartyVehicle, setThirdPartyVehicle] = useState('')
+  const [thirdPartyAddress, setThirdPartyAddress] = useState('')
   const [thirdPartyContact, setThirdPartyContact] = useState('')
   const [policeCaseNumber, setPoliceCaseNumber] = useState('')
 
@@ -242,10 +242,10 @@ export function IncidentPage() {
                 className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
                 placeholder="Third party full name" />
             </Field>
-            <Field label="Vehicle & registration">
-              <input type="text" value={thirdPartyVehicle} onChange={e => setThirdPartyVehicle(e.target.value)}
+            <Field label="Address">
+              <input type="text" value={thirdPartyAddress} onChange={e => setThirdPartyAddress(e.target.value)}
                 className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
-                placeholder="e.g. VW Polo · GP 44 KL PL" />
+                placeholder="e.g. 12 Main Road, Sandton" />
             </Field>
             <Field label="Contact number">
               <input type="tel" inputMode="tel" value={thirdPartyContact} onChange={e => setThirdPartyContact(e.target.value)}
@@ -255,12 +255,12 @@ export function IncidentPage() {
           </>
         )}
 
-        <SectionLabel>Police</SectionLabel>
+        {/* <SectionLabel>Police</SectionLabel>
         <Field label="Police case number" hint="Leave blank if not applicable">
           <input type="text" value={policeCaseNumber} onChange={e => setPoliceCaseNumber(e.target.value)}
             className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm font-mono focus:border-fleet-blue focus:outline-none"
             placeholder="e.g. CAS 45/07/2026" />
-        </Field>
+        </Field> */}
       </FormShell>
     )
   }

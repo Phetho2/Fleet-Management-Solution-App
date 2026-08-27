@@ -1,9 +1,9 @@
-// import { useState } from 'react' // Developer check — uncomment with components below
-// import { useMsal } from '@azure/msal-react' // Developer check — uncomment with components below
+import { useState } from 'react'
+import { useMsal } from '@azure/msal-react'
 import { useAuth } from '../../auth/useAuth'
 import { useDriver } from '../../context/DriverContext'
-// import { createDataverseClient } from '../../api/dataverseClient' // Developer check
-// import { TABLES } from '../../api/tables' // Developer check
+import { createDataverseClient } from '../../api/dataverseClient'
+import { TABLES } from '../../api/tables'
 
 function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
@@ -40,8 +40,6 @@ function formatDate(iso: string | undefined) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
 }
-
-/* Developer check — uncomment when adding more tables
 
 function ColumnDiscovery() {
   const { instance } = useMsal()
@@ -143,9 +141,12 @@ function RelationshipDiscovery() {
       const res = await client.discoverRelationships(table)
       setResults(
         res.value
-          .filter(r => r.ReferencingAttribute.startsWith('new_'))
+          // Regular lookups have a 'new_' attribute name. Polymorphic lookups
+          // (e.g. annotation.objectid, used for photo attachments) keep a fixed
+          // attribute name like 'objectid' — match on the target entity instead.
+          .filter(r => r.ReferencingAttribute.startsWith('new_') || r.ReferencedEntity.startsWith('new_'))
           .map(r => ({ attr: r.ReferencingAttribute, target: r.ReferencedEntity, navProp: r.ReferencingEntityNavigationPropertyName }))
-          .sort((a, b) => a.attr.localeCompare(b.attr))
+          .sort((a, b) => a.target.localeCompare(b.target))
       )
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Discovery failed')
@@ -190,7 +191,7 @@ function RelationshipDiscovery() {
                   Use the <span className="font-mono">Nav property</span> value as the key in <span className="font-mono">@odata.bind</span>
                 </div>
                 {results.map(r => (
-                  <div key={r.attr} className="py-1.5 border-b border-[#EEF2F7]">
+                  <div key={`${r.attr}-${r.target}`} className="py-1.5 border-b border-[#EEF2F7]">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="font-mono text-[11px] text-fleet-ink-3">{r.attr} → {r.target}</span>
                     </div>
@@ -322,8 +323,6 @@ function TableDiscovery() {
   )
 }
 
-*/ // end Developer check
-
 export function ProfilePage() {
   const { account, logout } = useAuth()
   const { driver, vehicle, lastService } = useDriver()
@@ -403,11 +402,9 @@ export function ProfilePage() {
           </div>
         )}
 
-        {/* Developer check — uncomment when adding more tables
         <TableDiscovery />
         <ColumnDiscovery />
         <RelationshipDiscovery />
-        */}
 
         {/* Sign out */}
         <button

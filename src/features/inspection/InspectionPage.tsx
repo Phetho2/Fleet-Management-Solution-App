@@ -75,6 +75,14 @@ function YesNo({
 /* ── Step definitions ─────────────────────────────────────── */
 const STEPS = ['Location & odometer', 'Condition checks', 'Cleanliness & lights', 'Confirm & sign']
 
+const INSPECTION_TITLES = [
+  'Pre-Trip Inspection',
+  'Post-Trip Inspection',
+  'Morning Inspection',
+  'End-of-Day Inspection',
+  'Weekly Inspection',
+]
+
 export function InspectionPage() {
   const { instance } = useMsal()
   const { driver, vehicle } = useDriver()
@@ -92,8 +100,6 @@ export function InspectionPage() {
   const [nextServiceOdo, setNextSvcOdo] = useState('')
 
   // Step 1 — condition checks
-  const [isRoadworthy, setRoadworthy]         = useState<boolean | undefined>()
-  const [roadworthyComment, setRwComment]     = useState('')
   const [exteriorcondition, setExterior]      = useState('')
   const [interiorcondition, setInterior]      = useState('')
   const [interiorComments, setInteriorComments] = useState('')
@@ -111,13 +117,13 @@ export function InspectionPage() {
   const [error, setError]           = useState<string | null>(null)
 
   // Determine pass/fail: fail if any required check is false
-  const failChecks = [isRoadworthy, mirrorsWorking, headlightsWorking].filter(v => v === false).length
+  const failChecks = [mirrorsWorking, headlightsWorking].filter(v => v === false).length
 const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
 
   const validateStep = () => {
     if (step === 0 && !title.trim()) { setError('Inspection title is required.'); return false }
     if (step === 0 && !odometer) { setError('Odometer reading is required.'); return false }
-    if (step === 1 && (isRoadworthy === undefined || isneat === undefined)) {
+    if (step === 1 && isneat === undefined) {
       setError('Please answer all condition checks.'); return false
     }
     if (step === 2 && (isInteriorClean === undefined || mirrorsWorking === undefined || headlightsWorking === undefined)) {
@@ -148,9 +154,6 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
         new_sitelocation:                site || undefined,
         new_streetaddress:               street || undefined,
         new_city:                        city || undefined,
-        new_roadworthinesscomments:      isRoadworthy === false
-                                           ? `No${roadworthyComment ? ` — ${roadworthyComment}` : ''}`
-                                           : isRoadworthy ? 'Yes' : undefined,
         new_exteriorcondition:           exteriorcondition || undefined,
         new_interiorcondition:           interiorcondition || undefined,
         new_interiorconditioncomments:   interiorComments || undefined,
@@ -195,9 +198,11 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
       </div>
 
       <Field label="Inspection title" required>
-        <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
-          placeholder="e.g. Morning inspection — Midrand" />
+        <select value={title} onChange={e => setTitle(e.target.value)}
+          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm bg-white focus:border-fleet-blue focus:outline-none appearance-none">
+          <option value="" disabled>Select inspection type…</option>
+          {INSPECTION_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
       </Field>
 
       <SectionLabel>Location</SectionLabel>
@@ -237,13 +242,6 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
   if (step === 1) return (
     <FormShell title="Daily Inspection" subtitle={stepSubtitle}
       onSubmit={handleSubmit} submitLabel="Continue →" error={error} progress={progress}>
-
-      <SectionLabel>Roadworthiness</SectionLabel>
-      <YesNo label="Is the car roadworthy?"
-        value={isRoadworthy} onChange={setRoadworthy}
-        comment={roadworthyComment} onComment={setRwComment}
-        commentLabel="Describe what makes it unroadworthy…"
-        alwaysComment />
 
       <SectionLabel>Exterior</SectionLabel>
       <Field label="Exterior condition">
@@ -327,7 +325,6 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
           ['Vehicle', vehicle ? `${vehicle.new_vehiclemake} ${vehicle.new_vehiclemodel} · ${vehicle.new_registrationnumber}` : '—'],
           ['Odometer', odometer ? `${Number(odometer).toLocaleString()} km` : '—'],
           ['Location', [site, city].filter(Boolean).join(', ') || '—'],
-          ['Roadworthy', isRoadworthy ? 'Yes' : 'No'],
           ['Neat', isneat ? 'Yes' : 'No'],
           ['Interior clean', isInteriorClean ? 'Yes' : 'No'],
           ['Mirrors', mirrorsWorking ? 'OK' : 'Faulty'],

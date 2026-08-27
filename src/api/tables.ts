@@ -25,3 +25,13 @@ export const TABLES = {
   trips:       'new_checkouts',
   checkins:    'new_checkins',
 } as const
+
+/**
+ * Singular table logical names, needed for the polymorphic
+ * `objectid_<entity>@odata.bind` lookup when attaching a photo
+ * (see dataverseClient.uploadPhoto). Verify against Dataverse if uploads 404.
+ */
+export const ENTITY_LOGICAL = {
+  trips:    'new_checkout',
+  checkins: 'new_checkin',
+} as const

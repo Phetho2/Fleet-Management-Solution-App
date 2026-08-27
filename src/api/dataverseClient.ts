@@ -63,6 +63,15 @@ async function request<T>(
   return res.json() as Promise<T>
 }
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '')
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
 export function createDataverseClient(instance: IPublicClientApplication) {
   return {
     /** GET – returns OData response with a `value` array */
@@ -76,6 +85,24 @@ export function createDataverseClient(instance: IPublicClientApplication) {
     /** PATCH – updates a record by id */
     update: (entity: string, id: string, data: Record<string, unknown>) =>
       request<void>(instance, 'PATCH', `${entity}(${id})`, data),
+
+    /**
+     * Attaches a photo to a record as a Dataverse note (annotation).
+     * `entitySet` is the OData entity set (e.g. TABLES.checkins), `entityLogicalName`
+     * is the table's singular logical name (e.g. 'new_checkin') used for the
+     * polymorphic `objectid_<entity>@odata.bind` lookup.
+     */
+    uploadPhoto: async (entitySet: string, entityLogicalName: string, recordId: string, blob: Blob, index = 0) => {
+      const documentbody = await blobToBase64(blob)
+      const filename = `photo-${Date.now()}-${index}.jpg`
+      return request<string | null>(instance, 'POST', 'annotations', {
+        subject: filename,
+        filename,
+        mimetype: blob.type || 'image/jpeg',
+        documentbody,
+        [`objectid_${entityLogicalName}@odata.bind`]: `/${entitySet}(${recordId})`,
+      }, true)
+    },
 
     /**
      * Queries Dataverse metadata to list all entity set names whose
