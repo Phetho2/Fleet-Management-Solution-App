@@ -63,7 +63,7 @@ export function IncidentPage() {
   const [thirdPartyName, setThirdPartyName]     = useState('')
   const [thirdPartyAddress, setThirdPartyAddress] = useState('')
   const [thirdPartyContact, setThirdPartyContact] = useState('')
-  const [policeCaseNumber, setPoliceCaseNumber] = useState('')
+  const [policeCaseNumber] = useState('')
 
   // Step 3 — photos
   const [showCamera, setShowCamera]             = useState(false)
