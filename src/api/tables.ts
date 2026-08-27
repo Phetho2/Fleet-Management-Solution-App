@@ -36,4 +36,5 @@ export const TABLES = {
 export const ENTITY_LOGICAL = {
   trips:    'new_checkout',
   checkins: 'new_checkin',
+  defects:  'new_defectlog',
 } as const

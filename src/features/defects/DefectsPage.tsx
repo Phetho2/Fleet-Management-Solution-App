@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { createDataverseClient } from '../../api/dataverseClient'
-import { TABLES } from '../../api/tables'
+import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
+import { CameraCapture } from '../../components/CameraCapture'
+import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
 
 const DEFECT_TYPES = [
@@ -25,6 +27,8 @@ export function DefectsPage() {
   const [defectType, setDefectType] = useState('Other')
   const [severity, setSeverity]     = useState(100000001)
   const [description, setDescription] = useState('')
+  const [showCamera, setShowCamera] = useState(false)
+  const [photos, setPhotos]         = useState<CapturedPhoto[]>([])
   const [submitting, setSubmitting]   = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
@@ -46,13 +50,34 @@ export function DefectsPage() {
         new_severity:         severity,
         new_describethedefect: description,
       }
-      await client.create(TABLES.defects, body)
+      const id = await client.create(TABLES.defects, body)
+      if (id && photos.length) {
+        try {
+          await Promise.all(
+            photos.map((p, i) => client.uploadPhoto(TABLES.defects, ENTITY_LOGICAL.defects, id, p.blob, i))
+          )
+        } catch {
+          // Record already saved — don't block on photo upload failures
+        }
+      }
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submission failed')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (showCamera) {
+    return (
+      <CameraCapture
+        onCapture={blob => {
+          setPhotos(p => [...p, { blob, preview: URL.createObjectURL(blob) }])
+          setShowCamera(false)
+        }}
+        onClose={() => setShowCamera(false)}
+      />
+    )
   }
 
   return (
@@ -129,6 +154,15 @@ export function DefectsPage() {
           required
         />
       </div>
+
+      {/* Photo evidence */}
+      <PhotoField
+        label="Photo evidence"
+        hint="Optional — photograph the defect as proof of submission"
+        photos={photos}
+        onAdd={() => setShowCamera(true)}
+        onRemove={i => setPhotos(p => p.filter((_, idx) => idx !== i))}
+      />
     </FormShell>
   )
 }
