@@ -20,6 +20,11 @@ const SEVERITY = [
   { value: 100000002, label: 'High',   sub: 'Fix before next trip',        color: 'red' },
 ]
 
+// Dataverse's new_describethedefect column has a hard 100-character limit —
+// enforced here so neither a long AI description nor manual typing can ever
+// hit a validation error at submit time.
+const DESCRIPTION_MAX_LENGTH = 100
+
 export function DefectsPage() {
   const { instance } = useMsal()
   const { vehicle } = useDriver()
@@ -47,7 +52,7 @@ export function DefectsPage() {
       const token = await getDataverseToken(instance)
       const aiDescription = await describeImage(blob, token)
       if (aiDescription && !description) {
-        setDescription(aiDescription)
+        setDescription(aiDescription.slice(0, DESCRIPTION_MAX_LENGTH))
         setDescriptionAuto(true)
       }
     } catch {
@@ -73,7 +78,7 @@ export function DefectsPage() {
       const body: Record<string, unknown> = {
         new_whatisaffected:   defectType,
         new_severity:         severity,
-        new_describethedefect: description,
+        new_describethedefect: description.slice(0, DESCRIPTION_MAX_LENGTH),
       }
       const id = await client.create(TABLES.defects, body)
       if (id && photos.length) {
@@ -169,20 +174,27 @@ export function DefectsPage() {
           Describe the defect <span className="text-[#D92D20]">*</span>
         </label>
         <textarea
-          rows={4} value={description}
+          rows={4} value={description} maxLength={DESCRIPTION_MAX_LENGTH}
           onChange={e => { setDescription(e.target.value); setDescriptionAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm resize-none focus:border-fleet-blue focus:outline-none"
           placeholder="What are you noticing? When did it start? Getting worse?"
           required
         />
-        {analyzingPhoto && (
-          <div className="text-[10.5px] text-fleet-ink-3 font-semibold mt-1">🤖 Analyzing photo…</div>
-        )}
-        {descriptionAuto && (
-          <div className="text-[10.5px] text-fleet-blue font-semibold mt-1">
-            🤖 AI-suggested from your photo — please review and edit as needed
+        <div className="flex items-center justify-between mt-1">
+          <div>
+            {analyzingPhoto && (
+              <div className="text-[10.5px] text-fleet-ink-3 font-semibold">🤖 Analyzing photo…</div>
+            )}
+            {descriptionAuto && (
+              <div className="text-[10.5px] text-fleet-blue font-semibold">
+                🤖 AI-suggested from your photo — please review and edit as needed
+              </div>
+            )}
           </div>
-        )}
+          <div className="text-[10.5px] text-fleet-ink-3 font-semibold shrink-0">
+            {description.length}/{DESCRIPTION_MAX_LENGTH}
+          </div>
+        </div>
       </div>
 
       {/* Photo evidence */}

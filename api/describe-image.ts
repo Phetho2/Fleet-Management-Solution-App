@@ -11,12 +11,16 @@ const JWKS = TENANT_ID
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_BASE64_LENGTH = 8_000_000 // ~6MB image, comfortably under Vercel's request body limit
 
+const DESCRIPTION_MAX_LENGTH = 100 // matches the new_describethedefect column's max length in Dataverse
+
 const PROMPT =
   'You are assisting a fleet maintenance driver logging a vehicle defect. ' +
-  'Describe any visible damage, wear, or mechanical issues in this photo in 1-2 concise, ' +
-  'plain-language sentences suitable to prefill a defect report. If the vehicle or part shown ' +
-  'looks fine with no visible issues, say so plainly instead of guessing at a defect. ' +
-  'Only describe what is visibly in the photo — do not speculate about cause or severity.'
+  'Describe any visible damage, wear, or mechanical issues in this photo in one short, ' +
+  `plain-language sentence of no more than ${DESCRIPTION_MAX_LENGTH} characters, suitable to prefill a ` +
+  'defect report field with a hard length limit. If the vehicle or part shown looks fine with no ' +
+  'visible issues, say so plainly instead of guessing at a defect. Only describe what is visibly ' +
+  'in the photo — do not speculate about cause or severity. Reply with only the description, ' +
+  'no preamble.'
 
 /**
  * Confirms the caller has a valid, unexpired token issued by this org's own
