@@ -11,16 +11,33 @@ const JWKS = TENANT_ID
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_BASE64_LENGTH = 8_000_000 // ~6MB image, comfortably under Vercel's request body limit
 
-const DESCRIPTION_MAX_LENGTH = 100 // matches the new_describethedefect column's max length in Dataverse
+// Kept short for both contexts — the defect field has a hard 100-char limit in
+// Dataverse, and a concise incident description is more useful to prefill
+// than a long one anyway (the driver can always expand on it).
+const DESCRIPTION_TARGET_LENGTH = 100
 
-const PROMPT =
-  'You are assisting a fleet maintenance driver logging a vehicle defect. ' +
-  'Describe any visible damage, wear, or mechanical issues in this photo in one short, ' +
-  `plain-language sentence of no more than ${DESCRIPTION_MAX_LENGTH} characters, suitable to prefill a ` +
-  'defect report field with a hard length limit. If the vehicle or part shown looks fine with no ' +
-  'visible issues, say so plainly instead of guessing at a defect. Only describe what is visibly ' +
-  'in the photo — do not speculate about cause or severity. Reply with only the description, ' +
-  'no preamble.'
+const PROMPTS = {
+  defect:
+    'You are assisting a fleet maintenance driver logging a vehicle defect. ' +
+    'Describe any visible damage, wear, or mechanical issues in this photo in one short, ' +
+    `plain-language sentence of no more than ${DESCRIPTION_TARGET_LENGTH} characters, suitable to prefill a ` +
+    'defect report field with a hard length limit. If the vehicle or part shown looks fine with no ' +
+    'visible issues, say so plainly instead of guessing at a defect. Only describe what is visibly ' +
+    'in the photo — do not speculate about cause or severity. Reply with only the description, ' +
+    'no preamble.',
+  incident:
+    'You are assisting a driver filling in an accident/incident report for a fleet vehicle. ' +
+    'Describe what is visibly shown in this photo — vehicle damage, its location/severity, road or ' +
+    'scene conditions, position of vehicles involved — in 1-2 concise, plain-language sentences suitable ' +
+    'to prefill the report\'s description field. Only describe what is visibly in the photo — do not ' +
+    'guess at fault, cause, or anything not directly visible. Reply with only the description, no preamble.',
+} as const
+
+type DescribeContext = keyof typeof PROMPTS
+
+function isDescribeContext(value: unknown): value is DescribeContext {
+  return value === 'defect' || value === 'incident'
+}
 
 /**
  * Confirms the caller has a valid, unexpired token issued by this org's own
@@ -66,11 +83,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const { image, mimeType } = req.body ?? {}
+  const { image, mimeType, context } = req.body ?? {}
   if (typeof image !== 'string' || typeof mimeType !== 'string') {
     res.status(400).json({ error: 'Missing image or mimeType' })
     return
   }
+  const promptContext: DescribeContext = isDescribeContext(context) ? context : 'defect'
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     res.status(400).json({ error: 'Unsupported image type' })
     return
@@ -101,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mimeType, data: image } },
-            { type: 'text', text: PROMPT },
+            { type: 'text', text: PROMPTS[promptContext] },
           ],
         }],
       }),

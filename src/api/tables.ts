@@ -34,7 +34,8 @@ export const TABLES = {
  * (see dataverseClient.uploadPhoto). Verify against Dataverse if uploads 404.
  */
 export const ENTITY_LOGICAL = {
-  trips:    'new_checkout',
-  checkins: 'new_checkin',
-  defects:  'new_defectlog',
+  trips:     'new_checkout',
+  checkins:  'new_checkin',
+  defects:   'new_defectlog',
+  incidents: 'new_vehicleaccidentreport',
 } as const

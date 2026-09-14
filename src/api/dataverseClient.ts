@@ -77,51 +77,84 @@ function isUnknownColumnError(err: unknown): boolean {
   return /does not exist on type|Invalid property/i.test(msg)
 }
 
+function parseLengthExceededError(err: unknown): { field: string; maxLength: number } | null {
+  const msg = err instanceof Error ? err.message : String(err)
+  const m = msg.match(/length of the '(\w+)' attribute[\s\S]*?exceeded the maximum allowed length of '(\d+)/i)
+  return m ? { field: m[1], maxLength: Number(m[2]) } : null
+}
+
 /**
- * Creates a record, retrying once without `optionalKeys` if Dataverse rejects
- * the payload because one of them isn't a real column yet — e.g. a field like
- * a new geolocation column that hasn't been added in Dataverse yet. Once the
- * column is added there, it starts being saved with no code change needed.
+ * Applies one automatic correction to `body` based on a Dataverse error, if a
+ * known, safely-fixable pattern matches: drops a column that isn't a real
+ * field yet (one of `optionalKeys`), or truncates a string field down to the
+ * actual max length Dataverse just reported. Returns null if the error
+ * doesn't match a pattern we know how to fix without losing the whole write.
+ */
+function autoFixPayload(
+  body: Record<string, unknown>,
+  optionalKeys: string[],
+  err: unknown
+): { body: Record<string, unknown>; note: string } | null {
+  if (isUnknownColumnError(err)) {
+    const present = optionalKeys.filter(k => k in body)
+    if (!present.length) return null
+    const fixed = { ...body }
+    for (const key of present) delete fixed[key]
+    return { body: fixed, note: `dropped ${present.join(', ')} — column(s) not found` }
+  }
+  const lenErr = parseLengthExceededError(err)
+  if (lenErr && typeof body[lenErr.field] === 'string') {
+    const fixed = { ...body, [lenErr.field]: (body[lenErr.field] as string).slice(0, lenErr.maxLength) }
+    return { body: fixed, note: `truncated ${lenErr.field} to ${lenErr.maxLength} chars — it exceeded the column's real limit` }
+  }
+  return null
+}
+
+/**
+ * Creates a record, automatically retrying (up to twice) with a corrected
+ * payload if Dataverse rejects it for a known, safely-fixable reason: a
+ * column in `optionalKeys` that doesn't exist yet, or a string field that
+ * exceeds its actual max length. Both keep the record saved instead of
+ * failing the whole submission over one field.
  */
 export async function createResilient(
   client: ReturnType<typeof createDataverseClient>,
   entity: string,
   body: Record<string, unknown>,
-  optionalKeys: string[]
+  optionalKeys: string[] = []
 ): Promise<string | null> {
-  try {
-    return await client.create(entity, body)
-  } catch (err) {
-    if (!isUnknownColumnError(err)) throw err
-    const fallback = { ...body }
-    for (const key of optionalKeys) delete fallback[key]
-    console.warn(
-      `[Dataverse] ${entity}: dropped ${optionalKeys.join(', ')} — column(s) not found. Record saved without them. ` +
-      `Original error: ${err instanceof Error ? err.message : err}`
-    )
-    return client.create(entity, fallback)
+  let current = body
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await client.create(entity, current)
+    } catch (err) {
+      const fix = attempt < 2 ? autoFixPayload(current, optionalKeys, err) : null
+      if (!fix) throw err
+      console.warn(`[Dataverse] ${entity}: ${fix.note}. Original error: ${err instanceof Error ? err.message : err}`)
+      current = fix.body
+    }
   }
 }
 
-/** Same fallback behavior as {@link createResilient}, for PATCH updates. */
+/** Same auto-correcting retry behavior as {@link createResilient}, for PATCH updates. */
 export async function updateResilient(
   client: ReturnType<typeof createDataverseClient>,
   entity: string,
   id: string,
   body: Record<string, unknown>,
-  optionalKeys: string[]
+  optionalKeys: string[] = []
 ): Promise<void> {
-  try {
-    await client.update(entity, id, body)
-  } catch (err) {
-    if (!isUnknownColumnError(err)) throw err
-    const fallback = { ...body }
-    for (const key of optionalKeys) delete fallback[key]
-    console.warn(
-      `[Dataverse] ${entity}(${id}): dropped ${optionalKeys.join(', ')} — column(s) not found. Record updated without them. ` +
-      `Original error: ${err instanceof Error ? err.message : err}`
-    )
-    await client.update(entity, id, fallback)
+  let current = body
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await client.update(entity, id, current)
+      return
+    } catch (err) {
+      const fix = attempt < 2 ? autoFixPayload(current, optionalKeys, err) : null
+      if (!fix) throw err
+      console.warn(`[Dataverse] ${entity}(${id}): ${fix.note}. Original error: ${err instanceof Error ? err.message : err}`)
+      current = fix.body
+    }
   }
 }
 

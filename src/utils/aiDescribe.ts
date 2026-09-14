@@ -9,10 +9,16 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.
 /**
  * Sends a photo to the /api/describe-image serverless function for an
  * AI-generated description (used to prefill defect/incident text fields).
+ * `context` selects the prompt used server-side — 'defect' for a vehicle
+ * defect/maintenance issue, 'incident' for an accident/incident report.
  * Never throws — resolves null on any failure so it never blocks the form;
  * this is a convenience suggestion, not a required step.
  */
-export async function describeImage(blob: Blob, authToken: string): Promise<string | null> {
+export async function describeImage(
+  blob: Blob,
+  authToken: string,
+  context: 'defect' | 'incident' = 'defect'
+): Promise<string | null> {
   try {
     const image = await blobToBase64(blob)
     const res = await fetch(`${API_BASE_URL}/api/describe-image`, {
@@ -21,7 +27,7 @@ export async function describeImage(blob: Blob, authToken: string): Promise<stri
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ image, mimeType: blob.type || 'image/jpeg' }),
+      body: JSON.stringify({ image, mimeType: blob.type || 'image/jpeg', context }),
     })
     if (!res.ok) return null
     const data = await res.json()

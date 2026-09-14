@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
-import { createDataverseClient } from '../../api/dataverseClient'
-import { TABLES } from '../../api/tables'
+import { createDataverseClient, createResilient, getDataverseToken } from '../../api/dataverseClient'
+import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { CameraCapture } from '../../components/CameraCapture'
+import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
+import { captureLocation, reverseGeocode, isLowAccuracy } from '../../utils/geolocation'
+import { describeImage } from '../../utils/aiDescribe'
 
 const INCIDENT_TYPES = [
   { value: 1, label: 'Accident' },
@@ -53,9 +56,30 @@ export function IncidentPage() {
 
   const [incidentType, setIncidentType]         = useState(1)
   const [location, setLocation]                 = useState('')
+  const [locationAuto, setLocationAuto]         = useState(false)
+  const [geoStatus, setGeoStatus]               = useState<'pending' | 'ok' | 'unavailable'>('pending')
   const [description, setDescription]           = useState('')
+  const [descriptionAuto, setDescriptionAuto]   = useState(false)
+  const [analyzingPhoto, setAnalyzingPhoto]     = useState(false)
   const [causeOfAccident, setCauseOfAccident]   = useState('')
   const [vehicleStatus, setVehicleStatus]       = useState<number>(1)
+
+  // Auto-detect location as soon as the page opens and prefill the Location
+  // field with it — only if the driver hasn't already typed something, and
+  // never if the fix is too imprecise to be useful (e.g. an IP-based guess).
+  useEffect(() => {
+    captureLocation().then(pos => {
+      if (!pos || isLowAccuracy(pos)) { setGeoStatus('unavailable'); return }
+      reverseGeocode(pos.lat, pos.lng).then(name => {
+        setGeoStatus(name ? 'ok' : 'unavailable')
+        if (name && !location) {
+          setLocation(name)
+          setLocationAuto(true)
+        }
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Step 2 — other parties
   const [injuries, setInjuries]                 = useState(false)
@@ -65,18 +89,34 @@ export function IncidentPage() {
   const [thirdPartyContact, setThirdPartyContact] = useState('')
   const [policeCaseNumber] = useState('')
 
-  // Step 3 — photos
-  const [showCamera, setShowCamera]             = useState(false)
-  const [, setPhotoBlob]                         = useState<Blob | null>(null)
-  const [photoPreview, setPhotoPreview]         = useState<string | null>(null)
+  // Photos — captured in Step 1 (not Step 3) so the AI can describe them into
+  // the Description field before the driver leaves this step.
+  const [showCamera, setShowCamera] = useState(false)
+  const [photos, setPhotos]         = useState<CapturedPhoto[]>([])
 
   const [submitting, setSubmitting]             = useState(false)
   const [error, setError]                       = useState<string | null>(null)
 
-  const handleCapture = (blob: Blob) => {
-    setPhotoBlob(blob)
-    setPhotoPreview(URL.createObjectURL(blob))
+  // When a photo is added and the description is still empty, ask the AI to
+  // describe what's visible and prefill the field with it — editable, and
+  // never blocks the form if the request fails or is slow.
+  const handlePhotoCaptured = async (blob: Blob) => {
+    setPhotos(p => [...p, { blob, preview: URL.createObjectURL(blob) }])
     setShowCamera(false)
+    if (description) return
+    setAnalyzingPhoto(true)
+    try {
+      const token = await getDataverseToken(instance)
+      const aiDescription = await describeImage(blob, token, 'incident')
+      if (aiDescription && !description) {
+        setDescription(aiDescription)
+        setDescriptionAuto(true)
+      }
+    } catch {
+      // AI description is a convenience only — never surface this as a form error
+    } finally {
+      setAnalyzingPhoto(false)
+    }
   }
 
   const goNext = () => {
@@ -100,9 +140,22 @@ export function IncidentPage() {
 
       const incidentTypeLabel = INCIDENT_TYPES.find(t => t.value === incidentType)?.label ?? 'Incident'
 
+      // new_accidentcause is the only free-text narrative column available on
+      // this table — it's meant to hold cause + location + description + third
+      // party details combined. Sent un-truncated; createResilient truncates
+      // automatically to whatever Dataverse reports as the real limit if it's
+      // ever exceeded, rather than guessing a length upfront.
+      const narrative = [
+        causeOfAccident && `Cause: ${causeOfAccident}`,
+        location && `Location: ${location}`,
+        description && `Description: ${description}`,
+        injuries && 'Injuries reported.',
+        thirdParty && `Third party: ${[thirdPartyName, thirdPartyAddress, thirdPartyContact].filter(Boolean).join(', ')}`,
+      ].filter(Boolean).join(' | ')
+
       const body: Record<string, unknown> = {
         new_accidenttitle:            `${incidentTypeLabel} — ${new Date().toLocaleDateString('en-ZA')}`,
-        new_accidentcause:            causeOfAccident ? causeOfAccident.slice(0, 100) : undefined,
+        new_accidentcause:            narrative || undefined,
         new_vehiclestatus:            vehicleStatus,
         new_insuranceapprovalstatus:  1,   // Awaiting Assessment — admin updates this
         new_policecasenumber:             policeCaseNumber || null,
@@ -110,7 +163,16 @@ export function IncidentPage() {
         ...(vehicle ? { 'new_Vehicle@odata.bind': `/new_vehiclerecords(${vehicle.new_vehiclerecordid})` } : {}),
       }
 
-      await client.create(TABLES.incidents, body)
+      const id = await createResilient(client, TABLES.incidents, body)
+      if (id && photos.length) {
+        try {
+          await Promise.all(
+            photos.map((p, i) => client.uploadPhoto(TABLES.incidents, ENTITY_LOGICAL.incidents, id, p.blob, i))
+          )
+        } catch {
+          // Record already saved — don't block on photo upload failures
+        }
+      }
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submission failed')
@@ -120,7 +182,7 @@ export function IncidentPage() {
   }
 
   if (showCamera) {
-    return <CameraCapture onCapture={handleCapture} onClose={() => setShowCamera(false)} />
+    return <CameraCapture onCapture={handlePhotoCaptured} onClose={() => setShowCamera(false)} />
   }
 
   const progress = (step / 3) * 100
@@ -158,11 +220,28 @@ export function IncidentPage() {
           ))}
         </div>
 
-        <Field label="Location" required>
-          <input type="text" value={location} onChange={e => setLocation(e.target.value)}
+        <Field
+          label="Location" required
+          hint={
+            locationAuto ? 'Prefilled from your current location — please confirm it\'s correct' :
+            geoStatus === 'pending' ? 'Detecting your location…' :
+            geoStatus === 'unavailable' ? 'Couldn\'t detect your location — please enter it manually' :
+            undefined
+          }
+        >
+          <input type="text" value={location}
+            onChange={e => { setLocation(e.target.value); setLocationAuto(false) }}
             className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
             placeholder="e.g. N1 highway near Kyalami off-ramp" />
         </Field>
+
+        <PhotoField
+          label="Photo evidence"
+          hint="Photograph the damage, scene, and third party vehicle if applicable — the AI will suggest a description from it"
+          photos={photos}
+          onAdd={() => setShowCamera(true)}
+          onRemove={i => setPhotos(p => p.filter((_, idx) => idx !== i))}
+        />
 
         <Field label="Cause of accident" hint="What led to the incident?">
           <input type="text" value={causeOfAccident} onChange={e => setCauseOfAccident(e.target.value)}
@@ -171,9 +250,18 @@ export function IncidentPage() {
         </Field>
 
         <Field label="Description" required>
-          <textarea rows={4} value={description} onChange={e => setDescription(e.target.value)}
+          <textarea rows={4} value={description}
+            onChange={e => { setDescription(e.target.value); setDescriptionAuto(false) }}
             className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm resize-none focus:border-fleet-blue focus:outline-none"
             placeholder="In your own words — describe exactly what happened" />
+          {analyzingPhoto && (
+            <div className="text-[10.5px] text-fleet-ink-3 font-semibold mt-1">🤖 Analyzing photo…</div>
+          )}
+          {descriptionAuto && (
+            <div className="text-[10.5px] text-fleet-blue font-semibold mt-1">
+              🤖 AI-suggested from your photo — please review and edit as needed
+            </div>
+          )}
         </Field>
 
         <SectionLabel>Vehicle condition after incident</SectionLabel>
@@ -269,7 +357,7 @@ export function IncidentPage() {
   return (
     <FormShell
       title="Report Incident"
-      subtitle="Step 3 of 3 · Photo evidence & submit"
+      subtitle="Step 3 of 3 · Review & submit"
       onSubmit={handleSubmit}
       submitLabel="Submit incident report"
       submitting={submitting}
@@ -284,6 +372,7 @@ export function IncidentPage() {
           ['Location',  location],
           ['Cause',     causeOfAccident || '—'],
           ['Vehicle',   VEHICLE_STATUS_OPTIONS.find(s => s.value === vehicleStatus)?.label ?? '—'],
+          ['Photos',    photos.length ? `${photos.length} attached` : 'None'],
           ['Police no.', policeCaseNumber || 'N/A'],
         ].map(([k, v]) => (
           <div key={k} className="flex justify-between text-[12px] text-[#0A57C2]">
@@ -293,23 +382,13 @@ export function IncidentPage() {
         ))}
       </div>
 
-      <Field label="Photo evidence" hint="Photograph the damage, scene, and third party vehicle if applicable">
-        {photoPreview ? (
-          <div className="relative">
-            <img src={photoPreview} alt="Evidence" className="w-full rounded-xl object-cover max-h-52" />
-            <button type="button"
-              onClick={() => { setPhotoBlob(null); setPhotoPreview(null) }}
-              className="absolute top-2 right-2 bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold">
-              ×
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={() => setShowCamera(true)}
-            className="w-full border-2 border-dashed border-fleet-line rounded-xl py-8 text-fleet-ink-3 text-sm font-semibold hover:border-fleet-blue hover:text-fleet-blue transition-colors">
-            + Add photo
-          </button>
-        )}
-      </Field>
+      {photos.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto">
+          {photos.map((p, i) => (
+            <img key={i} src={p.preview} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" />
+          ))}
+        </div>
+      )}
 
       {/* Insurance note */}
       <div className="flex gap-2.5 p-3 rounded-xl text-[12px] font-semibold bg-[#FEF1DC] text-[#B0700B]">
