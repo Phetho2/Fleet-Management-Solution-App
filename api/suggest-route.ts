@@ -18,12 +18,16 @@ async function logAzureMapsFailure(label: string, res: Response): Promise<void> 
 }
 
 /**
- * Geocodes an address, biased toward the driver's current location and
- * restricted to South Africa. Without this, an ambiguous/incomplete address
- * (e.g. just a street name) can match a same-named place on another
- * continent — Azure Maps' routing engine then fails with "Origin and
- * destination have different ProductId's" since it can't route across
- * road-network tiles from different underlying data providers.
+ * Geocodes a destination, biased toward the driver's current location and
+ * restricted to South Africa. Uses Fuzzy Search (not the plain Address
+ * Search) since drivers type place/business/institution names as often as
+ * street addresses — Address Search only matches actual addresses and
+ * returns zero results for something like "Vaal University of Technology".
+ * Without the location bias, an ambiguous/incomplete address can also match
+ * a same-named place on another continent — Azure Maps' routing engine then
+ * fails with "Origin and destination have different ProductId's" since it
+ * can't route across road-network tiles from different underlying data
+ * providers.
  */
 async function geocodeAddress(
   address: string,
@@ -32,7 +36,7 @@ async function geocodeAddress(
   apiKey: string
 ): Promise<{ lat: number; lng: number } | null> {
   const url =
-    `${AZURE_MAPS_BASE}/search/address/json?api-version=1.0&subscription-key=${apiKey}` +
+    `${AZURE_MAPS_BASE}/search/fuzzy/json?api-version=1.0&subscription-key=${apiKey}` +
     `&query=${encodeURIComponent(address)}&limit=1` +
     `&lat=${originLat}&lon=${originLng}&radius=300000&countrySet=ZA`
   const res = await fetch(url)
@@ -70,16 +74,29 @@ async function computeRoute(
     endPointIndex?: number
     delayInSeconds?: number
   }> = route.sections ?? []
-  const slowSections = rawSections
-    .filter(s => s.sectionType?.toLowerCase() === 'traffic' && s.startPointIndex != null && s.endPointIndex != null)
+
+  // Structurally valid traffic sections (right shape), separate from whether
+  // their delay is actually significant — keeps the two failure modes below
+  // distinguishable: "field names don't match" vs. "just genuinely no delay".
+  const trafficSections = rawSections.filter(s =>
+    s.sectionType?.toLowerCase() === 'traffic' && s.startPointIndex != null && s.endPointIndex != null
+  )
+  if (rawSections.length && !trafficSections.length) {
+    console.error(`[Azure Maps] route (${routeType}): sections present but none matched expected shape — ${JSON.stringify(rawSections).slice(0, 300)}`)
+  }
+
+  // Azure Maps can return a "traffic" section with negligible or zero delay
+  // just to mark that current traffic conditions were considered for that
+  // stretch — that's not the same as it actually being slow, so require a
+  // real delay (30s+) before treating it as worth highlighting.
+  const MIN_NOTABLE_DELAY_SECONDS = 30
+  const slowSections = trafficSections
+    .filter(s => (s.delayInSeconds ?? 0) >= MIN_NOTABLE_DELAY_SECONDS)
     .map(s => ({
       startIndex: s.startPointIndex as number,
       endIndex: s.endPointIndex as number,
       delaySeconds: s.delayInSeconds ?? 0,
     }))
-  if (rawSections.length && !slowSections.length) {
-    console.error(`[Azure Maps] route (${routeType}): sections present but none matched — ${JSON.stringify(rawSections).slice(0, 300)}`)
-  }
 
   const trafficDelayMin = Math.round((summary.trafficDelayInSeconds ?? 0) / 60)
   // Always logged (not just on failure) — otherwise "no highlight shown" is
