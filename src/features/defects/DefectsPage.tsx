@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
-import { createDataverseClient } from '../../api/dataverseClient'
+import { createDataverseClient, getDataverseToken } from '../../api/dataverseClient'
 import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { CameraCapture } from '../../components/CameraCapture'
 import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
+import { describeImage } from '../../utils/aiDescribe'
 
 const DEFECT_TYPES = [
   'Engine', 'Transmission', 'Brakes', 'Tyres',
@@ -27,10 +28,34 @@ export function DefectsPage() {
   const [defectType, setDefectType] = useState('Other')
   const [severity, setSeverity]     = useState(100000001)
   const [description, setDescription] = useState('')
+  const [descriptionAuto, setDescriptionAuto] = useState(false)
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const [photos, setPhotos]         = useState<CapturedPhoto[]>([])
   const [submitting, setSubmitting]   = useState(false)
   const [error, setError]             = useState<string | null>(null)
+
+  // When a photo is added and the description is still empty, ask the AI to
+  // describe what's visible and prefill the field with it — editable, and
+  // never blocks the form if the request fails or is slow.
+  const handlePhotoCaptured = async (blob: Blob) => {
+    setPhotos(p => [...p, { blob, preview: URL.createObjectURL(blob) }])
+    setShowCamera(false)
+    if (description) return
+    setAnalyzingPhoto(true)
+    try {
+      const token = await getDataverseToken(instance)
+      const aiDescription = await describeImage(blob, token)
+      if (aiDescription && !description) {
+        setDescription(aiDescription)
+        setDescriptionAuto(true)
+      }
+    } catch {
+      // AI description is a convenience only — never surface this as a form error
+    } finally {
+      setAnalyzingPhoto(false)
+    }
+  }
 
   const urgencyColors: Record<string, string> = {
     green: 'bg-[#DFF5E8] border-[#0B7A45] text-[#0B7A45]',
@@ -71,10 +96,7 @@ export function DefectsPage() {
   if (showCamera) {
     return (
       <CameraCapture
-        onCapture={blob => {
-          setPhotos(p => [...p, { blob, preview: URL.createObjectURL(blob) }])
-          setShowCamera(false)
-        }}
+        onCapture={handlePhotoCaptured}
         onClose={() => setShowCamera(false)}
       />
     )
@@ -148,11 +170,19 @@ export function DefectsPage() {
         </label>
         <textarea
           rows={4} value={description}
-          onChange={e => setDescription(e.target.value)}
+          onChange={e => { setDescription(e.target.value); setDescriptionAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm resize-none focus:border-fleet-blue focus:outline-none"
           placeholder="What are you noticing? When did it start? Getting worse?"
           required
         />
+        {analyzingPhoto && (
+          <div className="text-[10.5px] text-fleet-ink-3 font-semibold mt-1">🤖 Analyzing photo…</div>
+        )}
+        {descriptionAuto && (
+          <div className="text-[10.5px] text-fleet-blue font-semibold mt-1">
+            🤖 AI-suggested from your photo — please review and edit as needed
+          </div>
+        )}
       </div>
 
       {/* Photo evidence */}
