@@ -6,6 +6,8 @@ import { TABLES } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { useDriver } from '../../context/DriverContext'
 import { useLastOdometer } from '../../hooks/useLastOdometer'
+import { captureLocation, reverseGeocode, isLowAccuracy } from '../../utils/geolocation'
+import { findNearbyFuelStation } from '../../utils/fuelStation'
 
 export function FuelPage() {
   const { instance } = useMsal()
@@ -17,6 +19,8 @@ export function FuelPage() {
   const [odo, setOdo]         = useState('')
   const [odoAuto, setOdoAuto] = useState(false)
   const [station, setStation] = useState('')
+  const [stationAuto, setStationAuto] = useState(false)
+  const [stationSource, setStationSource] = useState<'poi' | 'address' | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]     = useState<string | null>(null)
 
@@ -30,6 +34,27 @@ export function FuelPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastOdometer])
+
+  // Try to prefill the fuel station from the driver's current location: first
+  // look for an actual named fuel station nearby (OpenStreetMap), and if none
+  // is found, fall back to a general place name so the field isn't left blank.
+  useEffect(() => {
+    captureLocation().then(async pos => {
+      if (!pos || isLowAccuracy(pos) || station) return
+      const poiName = await findNearbyFuelStation(pos.lat, pos.lng)
+      if (poiName) {
+        if (!station) { setStation(poiName); setStationAuto(true); setStationSource('poi') }
+        return
+      }
+      const placeName = await reverseGeocode(pos.lat, pos.lng)
+      if (placeName && !station) {
+        setStation(placeName)
+        setStationAuto(true)
+        setStationSource('address')
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const ratePerLitre = litres && cost
     ? (Number(cost) / Number(litres)).toFixed(2)
@@ -79,11 +104,21 @@ export function FuelPage() {
         <input
           type="text"
           value={station}
-          onChange={e => setStation(e.target.value)}
+          onChange={e => { setStation(e.target.value); setStationAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
           placeholder="e.g. Engen N1 City"
           required
         />
+        {stationAuto && stationSource === 'poi' && (
+          <div className="text-[10.5px] text-fleet-blue font-semibold mt-1">
+            📍 Nearest fuel station detected from your location — please confirm it's correct
+          </div>
+        )}
+        {stationAuto && stationSource === 'address' && (
+          <div className="text-[10.5px] text-fleet-blue font-semibold mt-1">
+            📍 Prefilled from your current location — please rename to the fuel station if needed
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
