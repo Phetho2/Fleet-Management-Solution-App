@@ -8,6 +8,7 @@ export interface RouteSummary {
   distanceKm: number
   durationMin: number
   trafficDelayMin: number
+  geometry: { lat: number; lng: number }[]
 }
 
 export interface RouteSuggestion {

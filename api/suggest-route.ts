@@ -7,6 +7,7 @@ interface RouteSummary {
   distanceKm: number
   durationMin: number
   trafficDelayMin: number
+  geometry: { lat: number; lng: number }[]
 }
 
 async function logAzureMapsFailure(label: string, res: Response): Promise<void> {
@@ -53,13 +54,19 @@ async function computeRoute(
   const res = await fetch(url)
   if (!res.ok) { await logAzureMapsFailure(`route (${routeType})`, res); return null }
   const data = await res.json()
-  const summary = data?.routes?.[0]?.summary
+  const route = data?.routes?.[0]
+  const summary = route?.summary
   if (!summary) console.error(`[Azure Maps] route (${routeType}): no summary in response — ${JSON.stringify(data).slice(0, 300)}`)
   if (!summary) return null
+
+  const legs: Array<{ points?: Array<{ latitude: number; longitude: number }> }> = route.legs ?? []
+  const geometry = legs.flatMap(leg => (leg.points ?? []).map(p => ({ lat: p.latitude, lng: p.longitude })))
+
   return {
     distanceKm: Math.round((summary.lengthInMeters / 1000) * 10) / 10,
     durationMin: Math.round(summary.travelTimeInSeconds / 60),
     trafficDelayMin: Math.round((summary.trafficDelayInSeconds ?? 0) / 60),
+    geometry,
   }
 }
 

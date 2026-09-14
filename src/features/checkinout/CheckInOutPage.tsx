@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { createDataverseClient, createResilient, updateResilient, getDataverseToken } from '../../api/dataverseClient'
@@ -14,6 +14,10 @@ import { captureLocation, reverseGeocode, isLowAccuracy, type GeoPosition } from
 import { matchesVehicle } from '../../utils/vehicleMatch'
 import { useLastOdometer } from '../../hooks/useLastOdometer'
 import { suggestRoute, type RouteSuggestion } from '../../utils/suggestRoute'
+
+// Azure Maps' Web SDK is large (~1.7MB) — lazy-load it so only drivers who
+// actually open the route map pay for it, instead of it bloating every load.
+const RouteMap = lazy(() => import('../../components/RouteMap').then(m => ({ default: m.RouteMap })))
 
 // Vehicle condition picklist — confirm values with Dataverse if needed
 const CONDITIONS = [
@@ -78,6 +82,7 @@ export function CheckInOutPage() {
   const [routeResult, setRouteResult] = useState<RouteSuggestion | null>(null)
   const [routeError, setRouteError]   = useState<string | null>(null)
   const [routeLoading, setRouteLoading] = useState(false)
+  const [showRouteMap, setShowRouteMap] = useState(false)
 
   const handleSuggestRoute = async () => {
     if (!destination.trim()) return
@@ -214,6 +219,24 @@ export function CheckInOutPage() {
         }}
         onClose={() => setShowScanner(false)}
       />
+    )
+  }
+
+  if (showRouteMap && routeResult && location) {
+    return (
+      <Suspense fallback={
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center text-white text-sm">
+          Loading map…
+        </div>
+      }>
+        <RouteMap
+          origin={{ lat: location.lat, lng: location.lng }}
+          destination={routeResult.destination}
+          routes={routeResult.routes}
+          weatherAlerts={routeResult.weatherAlerts}
+          onClose={() => setShowRouteMap(false)}
+        />
+      </Suspense>
     )
   }
 
@@ -421,6 +444,13 @@ export function CheckInOutPage() {
                     ⚠ {routeResult.weatherAlerts.join(' · ')}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setShowRouteMap(true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold text-white bg-[#0A57C2]"
+                >
+                  🗺️ View on map with live traffic
+                </button>
                 <div className="text-[10.5px] text-fleet-ink-3">
                   Open your maps app for turn-by-turn navigation — this is a planning estimate only.
                 </div>
