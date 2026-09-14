@@ -8,6 +8,8 @@ interface RouteSummary {
   durationMin: number
   trafficDelayMin: number
   geometry: { lat: number; lng: number }[]
+  /** Sub-stretches of `geometry` (as index ranges) that are currently slow-moving. */
+  slowSections: { startIndex: number; endIndex: number; delaySeconds: number }[]
 }
 
 async function logAzureMapsFailure(label: string, res: Response): Promise<void> {
@@ -50,7 +52,7 @@ async function computeRoute(
   const url =
     `${AZURE_MAPS_BASE}/route/directions/json?api-version=1.0&subscription-key=${apiKey}` +
     `&query=${originLat},${originLng}:${destLat},${destLng}` +
-    `&routeType=${routeType}&traffic=true`
+    `&routeType=${routeType}&traffic=true&sectionType=traffic`
   const res = await fetch(url)
   if (!res.ok) { await logAzureMapsFailure(`route (${routeType})`, res); return null }
   const data = await res.json()
@@ -62,11 +64,29 @@ async function computeRoute(
   const legs: Array<{ points?: Array<{ latitude: number; longitude: number }> }> = route.legs ?? []
   const geometry = legs.flatMap(leg => (leg.points ?? []).map(p => ({ lat: p.latitude, lng: p.longitude })))
 
+  const rawSections: Array<{
+    sectionType?: string
+    startPointIndex?: number
+    endPointIndex?: number
+    delayInSeconds?: number
+  }> = route.sections ?? []
+  const slowSections = rawSections
+    .filter(s => s.sectionType?.toLowerCase() === 'traffic' && s.startPointIndex != null && s.endPointIndex != null)
+    .map(s => ({
+      startIndex: s.startPointIndex as number,
+      endIndex: s.endPointIndex as number,
+      delaySeconds: s.delayInSeconds ?? 0,
+    }))
+  if (rawSections.length && !slowSections.length) {
+    console.error(`[Azure Maps] route (${routeType}): sections present but none matched — ${JSON.stringify(rawSections).slice(0, 300)}`)
+  }
+
   return {
     distanceKm: Math.round((summary.lengthInMeters / 1000) * 10) / 10,
     durationMin: Math.round(summary.travelTimeInSeconds / 60),
     trafficDelayMin: Math.round((summary.trafficDelayInSeconds ?? 0) / 60),
     geometry,
+    slowSections,
   }
 }
 

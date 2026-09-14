@@ -9,6 +9,8 @@ export interface RouteSummary {
   durationMin: number
   trafficDelayMin: number
   geometry: { lat: number; lng: number }[]
+  /** Sub-stretches of `geometry` (as index ranges) that are currently slow-moving. */
+  slowSections: { startIndex: number; endIndex: number; delaySeconds: number }[]
 }
 
 export interface RouteSuggestion {

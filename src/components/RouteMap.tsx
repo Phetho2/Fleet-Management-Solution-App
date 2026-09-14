@@ -54,6 +54,27 @@ export function RouteMap({ origin, destination, routes, weatherAlerts, onClose }
       }))
       allPositions.push(...toPositions(routes.fastest.geometry))
 
+      // Highlight the specific stretch(es) of the recommended route that are
+      // currently slow-moving, drawn on top of the base line in red — rather
+      // than just the generic map-wide traffic flow layer, this points at
+      // exactly where on THIS route the delay is coming from.
+      if (routes.fastest.slowSections.length) {
+        const slowSource = new atlas.source.DataSource()
+        map.sources.add(slowSource)
+        for (const section of routes.fastest.slowSections) {
+          const stretch = routes.fastest.geometry.slice(section.startIndex, section.endIndex + 1)
+          if (stretch.length >= 2) {
+            slowSource.add(new atlas.data.Feature(new atlas.data.LineString(toPositions(stretch)), {
+              delaySeconds: section.delaySeconds,
+            }))
+          }
+        }
+        map.layers.add(new atlas.layer.LineLayer(slowSource, undefined, {
+          strokeColor: '#C42D3A',
+          strokeWidth: 7,
+        }))
+      }
+
       if (routes.eco) {
         const ecoSource = new atlas.source.DataSource()
         map.sources.add(ecoSource)
@@ -97,10 +118,13 @@ export function RouteMap({ origin, destination, routes, weatherAlerts, onClose }
         </div>
       )}
 
-      <div className="p-3 bg-black/80 flex gap-4 text-white text-[11px] font-semibold shrink-0">
+      <div className="p-3 bg-black/80 flex flex-wrap gap-4 text-white text-[11px] font-semibold shrink-0">
         <span className="flex items-center gap-1.5"><span className="w-4 h-1 bg-[#0F6FEE] inline-block rounded-full" /> Fastest</span>
         {routes.eco && (
           <span className="flex items-center gap-1.5"><span className="w-4 h-1 bg-[#0B7A45] inline-block rounded-full" /> Eco</span>
+        )}
+        {routes.fastest.slowSections.length > 0 && (
+          <span className="flex items-center gap-1.5"><span className="w-4 h-1 bg-[#C42D3A] inline-block rounded-full" /> Slow on your route</span>
         )}
         <span className="ml-auto opacity-70">Live traffic & incidents shown on map</span>
       </div>
