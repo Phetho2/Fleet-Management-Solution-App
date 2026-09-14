@@ -90,6 +90,13 @@ export function CheckInOutPage() {
       setRouteError('Your location isn\'t available yet — try again in a moment.')
       return
     }
+    if (isLowAccuracy(location)) {
+      // A low-accuracy (IP-based) fix can be wildly wrong — e.g. resolving to a
+      // different continent — which then biases destination geocoding toward
+      // that wrong location and produces a nonsensical or failed route.
+      setRouteError('Your location isn\'t accurate enough for a route suggestion (this often happens when testing without GPS, e.g. on a laptop). Try on a phone with location services on.')
+      return
+    }
     setRouteLoading(true); setRouteError(null); setRouteResult(null)
     try {
       const token = await getDataverseToken(instance)
