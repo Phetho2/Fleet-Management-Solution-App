@@ -1,12 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { jwtVerify, createRemoteJWKSet } from 'jose'
-
-// Reuses the same tenant ID the client already has configured for MSAL —
-// it's not secret, and this way there's no new env var to set up just for this.
-const TENANT_ID = process.env.VITE_ENTRA_TENANT_ID ?? ''
-const JWKS = TENANT_ID
-  ? createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys`))
-  : null
+import { verifyCaller, setCorsHeaders } from './_lib/auth'
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_BASE64_LENGTH = 8_000_000 // ~6MB image, comfortably under Vercel's request body limit
@@ -80,33 +73,8 @@ function extractJson(text: string): unknown | null {
   }
 }
 
-/**
- * Confirms the caller has a valid, unexpired token issued by this org's own
- * Entra ID tenant — the same delegated token already used for Dataverse
- * calls, reused here purely as proof of authentication. This blocks random
- * internet traffic from burning paid API credits on this endpoint; it does
- * not check token audience/scope, since the token was minted for Dataverse.
- */
-async function verifyCaller(authHeader: string | undefined): Promise<void> {
-  if (!JWKS) throw new Error('Server not configured with a tenant ID')
-  if (!authHeader?.startsWith('Bearer ')) throw new Error('Missing bearer token')
-  const token = authHeader.slice('Bearer '.length)
-  await jwtVerify(token, JWKS, {
-    issuer: [
-      `https://login.microsoftonline.com/${TENANT_ID}/v2.0`,
-      `https://sts.windows.net/${TENANT_ID}/`,
-    ],
-  })
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // The native Capacitor app bundles dist/ and serves it from a local
-  // capacitor://localhost (iOS) / https://localhost (Android) origin — always
-  // cross-origin from this Vercel deployment, so CORS must be handled here
-  // even though the PWA/web build calls this same-origin and wouldn't need it.
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  setCorsHeaders(res)
 
   if (req.method === 'OPTIONS') {
     res.status(204).end()

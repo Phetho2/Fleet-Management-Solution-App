@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
-import { createDataverseClient, createResilient, updateResilient } from '../../api/dataverseClient'
+import { createDataverseClient, createResilient, updateResilient, getDataverseToken } from '../../api/dataverseClient'
 import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { CameraCapture } from '../../components/CameraCapture'
@@ -13,6 +13,7 @@ import type { TripRecord } from '../../types/dataverse'
 import { captureLocation, reverseGeocode, isLowAccuracy, type GeoPosition } from '../../utils/geolocation'
 import { matchesVehicle } from '../../utils/vehicleMatch'
 import { useLastOdometer } from '../../hooks/useLastOdometer'
+import { suggestRoute, type RouteSuggestion } from '../../utils/suggestRoute'
 
 // Vehicle condition picklist — confirm values with Dataverse if needed
 const CONDITIONS = [
@@ -69,6 +70,33 @@ export function CheckInOutPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastOdometer, isReturn])
+
+  // Route suggestion (checkout only) — informational only, never persisted
+  // and never blocks checkout; the driver still navigates with their normal
+  // maps app.
+  const [destination, setDestination] = useState('')
+  const [routeResult, setRouteResult] = useState<RouteSuggestion | null>(null)
+  const [routeError, setRouteError]   = useState<string | null>(null)
+  const [routeLoading, setRouteLoading] = useState(false)
+
+  const handleSuggestRoute = async () => {
+    if (!destination.trim()) return
+    if (!location) {
+      setRouteError('Your location isn\'t available yet — try again in a moment.')
+      return
+    }
+    setRouteLoading(true); setRouteError(null); setRouteResult(null)
+    try {
+      const token = await getDataverseToken(instance)
+      const result = await suggestRoute(location.lat, location.lng, destination, token)
+      if ('error' in result) setRouteError(result.error)
+      else setRouteResult(result)
+    } catch {
+      setRouteError('Could not suggest a route right now.')
+    } finally {
+      setRouteLoading(false)
+    }
+  }
 
   const distance = odometer && odoOut
     ? Number(odometer) - Number(odoOut)
@@ -341,6 +369,63 @@ export function CheckInOutPage() {
               onChange={e => setExpectedReturn(e.target.value)}
               className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
             />
+          </div>
+
+          {/* Route suggestion */}
+          <div>
+            <label className="block text-[11.5px] font-bold text-navy mb-1.5">
+              Destination <span className="text-[10.5px] font-semibold text-fleet-ink-3">(optional — get a route suggestion)</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={destination}
+                onChange={e => { setDestination(e.target.value); setRouteResult(null); setRouteError(null) }}
+                className="flex-1 border-[1.5px] border-fleet-line rounded-xl p-3 text-sm focus:border-fleet-blue focus:outline-none"
+                placeholder="e.g. 14 Rivonia Rd, Sandton"
+              />
+              <button
+                type="button"
+                onClick={handleSuggestRoute}
+                disabled={!destination.trim() || routeLoading}
+                className="px-4 rounded-xl text-sm font-bold text-white bg-fleet-blue disabled:opacity-40 shrink-0"
+              >
+                {routeLoading ? '…' : '🧭 Route'}
+              </button>
+            </div>
+
+            {routeError && (
+              <div className="text-[11.5px] text-[#C42D3A] font-semibold mt-1.5">{routeError}</div>
+            )}
+
+            {routeResult && (
+              <div className="mt-2 bg-[#EAF2FE] border border-[#0F6FEE]/20 rounded-xl p-3 space-y-2">
+                <div className="flex justify-between text-[12.5px]">
+                  <span className="font-semibold text-[#0A57C2]">Fastest route</span>
+                  <span className="font-bold text-navy">
+                    {routeResult.routes.fastest.distanceKm} km · {routeResult.routes.fastest.durationMin} min
+                    {routeResult.routes.fastest.trafficDelayMin > 0 &&
+                      ` (+${routeResult.routes.fastest.trafficDelayMin} min traffic)`}
+                  </span>
+                </div>
+                {routeResult.routes.eco && (
+                  <div className="flex justify-between text-[12.5px]">
+                    <span className="font-semibold text-[#0B7A45]">Eco / fuel-efficient</span>
+                    <span className="font-bold text-navy">
+                      {routeResult.routes.eco.distanceKm} km · {routeResult.routes.eco.durationMin} min
+                    </span>
+                  </div>
+                )}
+                {routeResult.weatherAlerts.length > 0 && (
+                  <div className="text-[11.5px] font-semibold text-[#B0700B] pt-1 border-t border-[#0F6FEE]/15">
+                    ⚠ {routeResult.weatherAlerts.join(' · ')}
+                  </div>
+                )}
+                <div className="text-[10.5px] text-fleet-ink-3">
+                  Open your maps app for turn-by-turn navigation — this is a planning estimate only.
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
