@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
-import { createDataverseClient } from '../../api/dataverseClient'
-import { TABLES } from '../../api/tables'
+import { createDataverseClient, getDataverseToken } from '../../api/dataverseClient'
+import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
+import { CameraCapture } from '../../components/CameraCapture'
+import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
 import { useShift } from '../../context/ShiftContext'
 import { useLastOdometer } from '../../hooks/useLastOdometer'
+import { assessInspectionPhoto } from '../../utils/aiDescribe'
 
 /* ── Shared UI primitives ─────────────────────────────────── */
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -159,9 +162,54 @@ export function InspectionPage() {
 
   // Step 1 — condition checks
   const [exteriorcondition, setExterior]      = useState<number | ''>('')
+  const [exteriorAuto, setExteriorAuto]       = useState(false)
   const [interiorcondition, setInterior]      = useState<number | ''>('')
+  const [interiorAuto, setInteriorAuto]       = useState(false)
   const [interiorComments, setInteriorComments] = useState('')
+  const [commentsAuto, setCommentsAuto]       = useState(false)
   const [isneat, setNeat]                     = useState<boolean | undefined>()
+  const [neatAuto, setNeatAuto]               = useState(false)
+  const [showCamera, setShowCamera]           = useState(false)
+  const [photos, setPhotos]                   = useState<CapturedPhoto[]>([])
+  const [analyzingPhoto, setAnalyzingPhoto]   = useState(false)
+
+  const conditionValueForLabel = (label: 'Good' | 'Fair' | 'Poor') =>
+    CONDITION_OPTIONS.find(o => o.label === label)?.value ?? ''
+
+  // Each new photo is assessed by AI and only fills fields that are still
+  // unset — an exterior shot won't touch interior fields and vice versa, and
+  // nothing here ever overwrites a choice the driver already made themselves.
+  const handlePhotoCaptured = async (blob: Blob) => {
+    setPhotos(p => [...p, { blob, preview: URL.createObjectURL(blob) }])
+    setShowCamera(false)
+    setAnalyzingPhoto(true)
+    try {
+      const token = await getDataverseToken(instance)
+      const result = await assessInspectionPhoto(blob, token)
+      if (result) {
+        if (result.exteriorCondition && !exteriorcondition) {
+          setExterior(conditionValueForLabel(result.exteriorCondition))
+          setExteriorAuto(true)
+        }
+        if (result.interiorCondition && !interiorcondition) {
+          setInterior(conditionValueForLabel(result.interiorCondition))
+          setInteriorAuto(true)
+        }
+        if (result.comments && !interiorComments) {
+          setInteriorComments(result.comments)
+          setCommentsAuto(true)
+        }
+        if (result.isNeat !== null && isneat === undefined) {
+          setNeat(result.isNeat)
+          setNeatAuto(true)
+        }
+      }
+    } catch {
+      // AI assessment is a convenience only — never surface this as a form error
+    } finally {
+      setAnalyzingPhoto(false)
+    }
+  }
 
   // Step 2 — cleanliness & lights
   const [isInteriorClean, setClean]         = useState<boolean | undefined>()
@@ -224,7 +272,16 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
         'new_Driver@odata.bind':             `/new_drivers(${driver.new_driverid})`,
         ...(vehicle ? { 'new_Vehicle@odata.bind': `/new_vehiclerecords(${vehicle.new_vehiclerecordid})` } : {}),
       }
-      await client.create(TABLES.inspections, body)
+      const id = await client.create(TABLES.inspections, body)
+      if (id && photos.length) {
+        try {
+          await Promise.all(
+            photos.map((p, i) => client.uploadPhoto(TABLES.inspections, ENTITY_LOGICAL.inspections, id, p.blob, i))
+          )
+        } catch {
+          // Record already saved — don't block on photo upload failures
+        }
+      }
       setShift(result === 1 ? 'inspected' : 'not-started')
       navigate('/')
     } catch (err) {
@@ -232,6 +289,10 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (showCamera) {
+    return <CameraCapture onCapture={handlePhotoCaptured} onClose={() => setShowCamera(false)} />
   }
 
   const progress = ((step + (step === 3 ? 1 : 0)) / 4) * 100
@@ -293,23 +354,54 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
     <FormShell title="Daily Inspection" subtitle={stepSubtitle}
       onSubmit={handleSubmit} submitLabel="Continue →" error={error} progress={progress}>
 
+      <PhotoField
+        label="Vehicle photo"
+        hint="Photograph the exterior and/or interior — the AI will suggest condition ratings and comments from it"
+        photos={photos}
+        onAdd={() => setShowCamera(true)}
+        onRemove={i => setPhotos(p => p.filter((_, idx) => idx !== i))}
+      />
+      {analyzingPhoto && (
+        <div className="text-[10.5px] text-fleet-ink-3 font-semibold -mt-1">🤖 Analyzing photo…</div>
+      )}
+
       <SectionLabel>Exterior</SectionLabel>
-      <Field label="Exterior condition">
-        <ChoicePicker value={exteriorcondition} onChange={setExterior} options={CONDITION_OPTIONS} />
+      <Field
+        label="Exterior condition"
+        hint={exteriorAuto ? '🤖 AI-suggested from your photo — tap to change' : undefined}
+      >
+        <ChoicePicker value={exteriorcondition}
+          onChange={v => { setExterior(v); setExteriorAuto(false) }}
+          options={CONDITION_OPTIONS} />
       </Field>
 
       <SectionLabel>Interior</SectionLabel>
-      <Field label="Interior condition">
-        <ChoicePicker value={interiorcondition} onChange={setInterior} options={CONDITION_OPTIONS} />
+      <Field
+        label="Interior condition"
+        hint={interiorAuto ? '🤖 AI-suggested from your photo — tap to change' : undefined}
+      >
+        <ChoicePicker value={interiorcondition}
+          onChange={v => { setInterior(v); setInteriorAuto(false) }}
+          options={CONDITION_OPTIONS} />
       </Field>
-      <Field label="Interior condition comments">
-        <textarea rows={2} value={interiorComments} onChange={e => setInteriorComments(e.target.value)}
+      <Field
+        label="Interior condition comments"
+        hint={commentsAuto ? '🤖 AI-suggested from your photo — please review and edit as needed' : undefined}
+      >
+        <textarea rows={2} value={interiorComments}
+          onChange={e => { setInteriorComments(e.target.value); setCommentsAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm resize-none focus:border-fleet-blue focus:outline-none"
           placeholder="Additional notes…" />
       </Field>
 
       <SectionLabel>Neatness</SectionLabel>
-      <YesNo label="Is the vehicle in neat condition?" value={isneat} onChange={setNeat} />
+      <YesNo label="Is the vehicle in neat condition?" value={isneat}
+        onChange={v => { setNeat(v); setNeatAuto(false) }} />
+      {neatAuto && (
+        <div className="text-[10.5px] text-fleet-blue font-semibold -mt-1">
+          🤖 AI-suggested from your photo — please review
+        </div>
+      )}
     </FormShell>
   )
 

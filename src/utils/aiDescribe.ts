@@ -36,3 +36,35 @@ export async function describeImage(
     return null
   }
 }
+
+export interface InspectionAssessment {
+  exteriorCondition: 'Good' | 'Fair' | 'Poor' | null
+  interiorCondition: 'Good' | 'Fair' | 'Poor' | null
+  comments: string | null
+  isNeat: boolean | null
+}
+
+/**
+ * Sends a vehicle inspection photo for an AI condition assessment — only
+ * fills in whichever fields are actually visible in the photo (e.g. an
+ * exterior shot won't set interiorCondition). Never throws — resolves null
+ * on any failure so it never blocks the form.
+ */
+export async function assessInspectionPhoto(blob: Blob, authToken: string): Promise<InspectionAssessment | null> {
+  try {
+    const image = await blobToBase64(blob)
+    const res = await fetch(`${API_BASE_URL}/api/describe-image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ image, mimeType: blob.type || 'image/jpeg', context: 'inspection' }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.result ?? null
+  } catch {
+    return null
+  }
+}

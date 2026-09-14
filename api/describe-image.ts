@@ -31,12 +31,53 @@ const PROMPTS = {
     'scene conditions, position of vehicles involved — in 1-2 concise, plain-language sentences suitable ' +
     'to prefill the report\'s description field. Only describe what is visibly in the photo — do not ' +
     'guess at fault, cause, or anything not directly visible. Reply with only the description, no preamble.',
+  inspection:
+    'You are assisting a fleet driver completing a vehicle inspection checklist. Assess only what is ' +
+    'actually visible in this single photo. Respond with ONLY a single JSON object — no markdown fences, ' +
+    'no explanation before or after it — in exactly this shape: {"exteriorCondition": "Good"|"Fair"|"Poor"|null, ' +
+    '"interiorCondition": "Good"|"Fair"|"Poor"|null, "comments": string|null, "isNeat": true|false|null}. ' +
+    'Set "exteriorCondition" only if the vehicle\'s exterior (body, paint, tyres, lights) is visible in the ' +
+    'photo, otherwise null. Set "interiorCondition" only if the cabin/seats/dashboard are visible, otherwise ' +
+    'null. "comments" is a short plain-language note (under 100 characters) on anything notable — dirt, wear, ' +
+    'damage — or null if there is nothing worth flagging. "isNeat" reflects whether the vehicle looks tidy ' +
+    'and well kept overall in this photo, or null if you cannot judge that from what is shown. Do not guess ' +
+    'about parts of the vehicle that are not visible in the photo.',
 } as const
 
 type DescribeContext = keyof typeof PROMPTS
 
 function isDescribeContext(value: unknown): value is DescribeContext {
-  return value === 'defect' || value === 'incident'
+  return value === 'defect' || value === 'incident' || value === 'inspection'
+}
+
+const CONDITION_VALUES = new Set(['Good', 'Fair', 'Poor'])
+
+export interface InspectionAssessment {
+  exteriorCondition: 'Good' | 'Fair' | 'Poor' | null
+  interiorCondition: 'Good' | 'Fair' | 'Poor' | null
+  comments: string | null
+  isNeat: boolean | null
+}
+
+function isInspectionAssessment(v: unknown): v is InspectionAssessment {
+  if (!v || typeof v !== 'object') return false
+  const o = v as Record<string, unknown>
+  const okCondition = (x: unknown) => x === null || CONDITION_VALUES.has(x as string)
+  const okComments = o.comments === null || typeof o.comments === 'string'
+  const okNeat = o.isNeat === null || typeof o.isNeat === 'boolean'
+  return okCondition(o.exteriorCondition) && okCondition(o.interiorCondition) && okComments && okNeat
+}
+
+/** Strips optional markdown code fences and parses the remaining text as JSON. */
+function extractJson(text: string): unknown | null {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    if (!match) return null
+    try { return JSON.parse(match[0]) } catch { return null }
+  }
 }
 
 /**
@@ -132,13 +173,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const data = await anthropicRes.json()
-    const description = data?.content?.[0]?.text?.trim()
-    if (!description) {
-      res.status(502).json({ error: 'No description returned' })
+    const text = data?.content?.[0]?.text?.trim()
+    if (!text) {
+      res.status(502).json({ error: 'No response returned' })
       return
     }
 
-    res.status(200).json({ description })
+    if (promptContext === 'inspection') {
+      const parsed = extractJson(text)
+      if (!isInspectionAssessment(parsed)) {
+        res.status(502).json({ error: 'Could not parse inspection assessment' })
+        return
+      }
+      res.status(200).json({ result: parsed })
+      return
+    }
+
+    res.status(200).json({ description: text })
   } catch (err) {
     res.status(502).json({ error: err instanceof Error ? err.message : 'Request to Anthropic failed' })
   }
