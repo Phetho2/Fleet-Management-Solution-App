@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { createDataverseClient } from '../../api/dataverseClient'
 import { TABLES } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { useDriver } from '../../context/DriverContext'
+import { useLastOdometer } from '../../hooks/useLastOdometer'
 
 export function FuelPage() {
   const { instance } = useMsal()
@@ -14,9 +15,21 @@ export function FuelPage() {
   const [litres, setLitres]   = useState('')
   const [cost, setCost]       = useState('')
   const [odo, setOdo]         = useState('')
+  const [odoAuto, setOdoAuto] = useState(false)
   const [station, setStation] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+
+  // Suggest the last known odometer reading instead of making the driver
+  // retype it from scratch — only applies if they haven't typed anything yet.
+  const { lastOdometer } = useLastOdometer()
+  useEffect(() => {
+    if (lastOdometer != null && !odo) {
+      setOdo(String(lastOdometer))
+      setOdoAuto(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastOdometer])
 
   const ratePerLitre = litres && cost
     ? (Number(cost) / Number(litres)).toFixed(2)
@@ -115,11 +128,16 @@ export function FuelPage() {
         <input
           type="number" inputMode="numeric"
           value={odo}
-          onChange={e => setOdo(e.target.value)}
+          onChange={e => { setOdo(e.target.value); setOdoAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm font-mono focus:border-fleet-blue focus:outline-none"
           placeholder="e.g. 95730"
           required
         />
+        {odoAuto && (
+          <div className="text-[10.5px] text-fleet-blue font-semibold mt-1">
+            Prefilled from the last recorded reading — please confirm it's correct
+          </div>
+        )}
       </div>
     </FormShell>
   )

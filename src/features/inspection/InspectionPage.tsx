@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { createDataverseClient } from '../../api/dataverseClient'
@@ -6,6 +6,7 @@ import { TABLES } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { useDriver } from '../../context/DriverContext'
 import { useShift } from '../../context/ShiftContext'
+import { useLastOdometer } from '../../hooks/useLastOdometer'
 
 /* ── Shared UI primitives ─────────────────────────────────── */
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -121,7 +122,7 @@ const SITE_LOCATIONS = [
 
 export function InspectionPage() {
   const { instance } = useMsal()
-  const { driver, vehicle } = useDriver()
+  const { driver, vehicle, lastService } = useDriver()
   const { setShift } = useShift()
   const navigate = useNavigate()
 
@@ -131,7 +132,30 @@ export function InspectionPage() {
   const [title, setTitle]             = useState<number | ''>('')
   const [site, setSite]               = useState<number | ''>('')
   const [odometer, setOdometer]       = useState('')
+  const [odometerAuto, setOdometerAuto] = useState(false)
   const [nextServiceOdo, setNextSvcOdo] = useState('')
+  const [nextServiceOdoAuto, setNextServiceOdoAuto] = useState(false)
+
+  // Suggest the last known odometer reading instead of making the driver
+  // retype it from scratch — only applies if they haven't typed anything yet.
+  const { lastOdometer } = useLastOdometer()
+  useEffect(() => {
+    if (lastOdometer != null && !odometer) {
+      setOdometer(String(lastOdometer))
+      setOdometerAuto(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastOdometer])
+
+  // The vehicle's next service mileage is already fetched by DriverContext —
+  // reuse it instead of asking the driver to know/type it themselves.
+  useEffect(() => {
+    if (lastService?.new_nextservicemileage != null && !nextServiceOdo) {
+      setNextSvcOdo(String(lastService.new_nextservicemileage))
+      setNextServiceOdoAuto(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastService])
 
   // Step 1 — condition checks
   const [exteriorcondition, setExterior]      = useState<number | ''>('')
@@ -243,13 +267,21 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
       </Field>
 
       <SectionLabel>Odometer</SectionLabel>
-      <Field label="Current odometer reading (km)" required>
-        <input type="number" inputMode="numeric" value={odometer} onChange={e => setOdometer(e.target.value)}
+      <Field
+        label="Current odometer reading (km)" required
+        hint={odometerAuto ? 'Prefilled from the last recorded reading — please confirm it\'s correct' : undefined}
+      >
+        <input type="number" inputMode="numeric" value={odometer}
+          onChange={e => { setOdometer(e.target.value); setOdometerAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm font-mono focus:border-fleet-blue focus:outline-none"
           placeholder="e.g. 45250" />
       </Field>
-      <Field label="Next service odometer reading (km)">
-        <input type="number" inputMode="numeric" value={nextServiceOdo} onChange={e => setNextSvcOdo(e.target.value)}
+      <Field
+        label="Next service odometer reading (km)"
+        hint={nextServiceOdoAuto ? 'Prefilled from the vehicle\'s last service record — please confirm it\'s correct' : undefined}
+      >
+        <input type="number" inputMode="numeric" value={nextServiceOdo}
+          onChange={e => { setNextSvcOdo(e.target.value); setNextServiceOdoAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm font-mono focus:border-fleet-blue focus:outline-none"
           placeholder="e.g. 60000" />
       </Field>

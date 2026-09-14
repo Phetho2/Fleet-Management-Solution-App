@@ -78,6 +78,8 @@ export interface TripRecord {
   new_purposeoftrip?: string
   new_expectedreturn?: string    // ISO DateTime
   new_notes?: string
+  crbc3_checkoutlatitude?: number
+  crbc3_checkoutlongitude?: number
   statecode?: number             // 0=Active (on trip), 1=Inactive (returned)
   statuscode?: number
   createdon?: string
@@ -129,6 +131,10 @@ export interface CheckinRecord {
   new_closingodometerkm?: number
   new_vehicleconditiononreturn?: number  // Picklist — values TBC from Dataverse
   new_notes?: string
+  crbc3_checkinlatitude?: number
+  crbc3_checkinlongitude?: number
+  crbc3_returnlatitude?: number
+  crbc3_returnlongitude?: number
   statecode?: number
   createdon?: string
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMsal } from '@azure/msal-react'
-import { createDataverseClient } from '../../api/dataverseClient'
+import { createDataverseClient, retrieveResilient } from '../../api/dataverseClient'
 import { TABLES } from '../../api/tables'
 import { useDriver } from '../../context/DriverContext'
 import type { InspectionRecord, TripRecord, FuelRecord, IncidentRecord, DefectRecord } from '../../types/dataverse'
@@ -15,6 +15,12 @@ interface ActivityItem {
   icon: 'clip' | 'key' | 'fuel' | 'warn' | 'wrench'
   color: ActivityColor
   result: string
+  mapUrl?: string
+}
+
+function mapsLink(lat?: number, lng?: number): string | undefined {
+  if (lat == null || lng == null) return undefined
+  return `https://www.google.com/maps?q=${lat},${lng}`
 }
 
 function mapInspections(records: InspectionRecord[]): ActivityItem[] {
@@ -40,6 +46,7 @@ function mapTrips(records: TripRecord[]): ActivityItem[] {
       icon: 'key',
       color: isClosed ? 'green' : 'blue',
       result: isClosed ? 'Returned' : 'On trip',
+      mapUrl: mapsLink(r.crbc3_checkoutlatitude, r.crbc3_checkoutlongitude),
     }
   })
 }
@@ -156,8 +163,9 @@ export function ActivityPage() {
     Promise.allSettled([
       client.retrieve<InspectionRecord>(TABLES.inspections,
         `$filter=_new_driver_value eq ${id}&$select=new_dailyinspectionid,createdon&$orderby=createdon desc&$top=15`),
-      client.retrieve<TripRecord>(TABLES.trips,
-        `$select=new_checkoutid,new_purposeoftrip,new_odometerreadingkm,statecode,createdon&$orderby=createdon desc&$top=15`),
+      retrieveResilient<TripRecord>(client, TABLES.trips,
+        `$select=new_checkoutid,new_purposeoftrip,new_odometerreadingkm,crbc3_checkoutlatitude,crbc3_checkoutlongitude,statecode,createdon&$orderby=createdon desc&$top=15`,
+        ['crbc3_checkoutlatitude', 'crbc3_checkoutlongitude']),
       client.retrieve<FuelRecord>(TABLES.fuel,
         `$select=new_fuelmilageid,new_date,new_litresfilled,new_totalcostr,new_fuelstation&$orderby=new_date desc&$top=15`),
       client.retrieve<IncidentRecord>(TABLES.incidents,
@@ -232,6 +240,21 @@ export function ActivityPage() {
                     <div className="text-[11.5px] text-fleet-ink-3 mt-0.5">
                       {item.sub}{item.sub ? ' · ' : ''}{formatDate(item.date)}
                     </div>
+                    {item.mapUrl && (
+                      <a
+                        href={item.mapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-fleet-blue mt-1"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12z"/>
+                          <circle cx="12" cy="9" r="2.4"/>
+                        </svg>
+                        View on map
+                      </a>
+                    )}
                   </div>
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0 ${bg} ${fg}`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-current" />

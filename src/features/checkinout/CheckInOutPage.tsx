@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
-import { createDataverseClient } from '../../api/dataverseClient'
+import { createDataverseClient, createResilient, updateResilient } from '../../api/dataverseClient'
 import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { CameraCapture } from '../../components/CameraCapture'
 import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
+import { VehicleScanner } from '../../components/VehicleScanner'
 import { useDriver } from '../../context/DriverContext'
 import { useShift } from '../../context/ShiftContext'
 import type { TripRecord } from '../../types/dataverse'
+import { captureLocation, reverseGeocode, isLowAccuracy, type GeoPosition } from '../../utils/geolocation'
+import { matchesVehicle } from '../../utils/vehicleMatch'
+import { useLastOdometer } from '../../hooks/useLastOdometer'
 
 // Vehicle condition picklist — confirm values with Dataverse if needed
 const CONDITIONS = [
@@ -26,6 +30,7 @@ export function CheckInOutPage() {
   const isReturn = shift === 'on-trip'
 
   const [odometer, setOdometer]   = useState('')
+  const [odometerAuto, setOdometerAuto] = useState(false)
   const [condition, setCondition] = useState(100000000)
   const [purpose, setPurpose]     = useState('Client site visit')
   const [expectedReturn, setExpectedReturn] = useState('')
@@ -33,8 +38,37 @@ export function CheckInOutPage() {
   const [openTripId, setOpenTripId] = useState<string | null>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [photos, setPhotos]       = useState<CapturedPhoto[]>([])
+  const [showScanner, setShowScanner] = useState(false)
+  const [scanResult, setScanResult] = useState<{ text: string; matched: boolean } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState<string | null>(null)
+  const [location, setLocation]   = useState<GeoPosition | null>(null)
+  const [locationStatus, setLocationStatus] = useState<'pending' | 'ok' | 'unavailable'>('pending')
+  const [locationName, setLocationName] = useState<string | null>(null)
+
+  // Capture location in the background as soon as the page opens, so it's
+  // ready by the time the driver taps submit — never blocks the form.
+  useEffect(() => {
+    captureLocation().then(pos => {
+      setLocation(pos)
+      setLocationStatus(pos ? 'ok' : 'unavailable')
+      // Skip reverse geocoding a low-accuracy (likely IP-based) fix — resolving
+      // an address for an untrustworthy coordinate just adds false confidence.
+      if (pos && !isLowAccuracy(pos)) reverseGeocode(pos.lat, pos.lng).then(setLocationName)
+    })
+  }, [])
+
+  // Suggest the last known odometer reading for checkout only — on return the
+  // field means "closing odometer", which must reflect the actual trip driven,
+  // not a stale prior reading.
+  const { lastOdometer } = useLastOdometer()
+  useEffect(() => {
+    if (!isReturn && lastOdometer != null && !odometer) {
+      setOdometer(String(lastOdometer))
+      setOdometerAuto(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastOdometer, isReturn])
 
   const distance = odometer && odoOut
     ? Number(odometer) - Number(odoOut)
@@ -71,11 +105,16 @@ export function CheckInOutPage() {
       if (isReturn) {
         // PATCH the checkin record with return info
         if (checkinId) {
-          await client.update(TABLES.checkins, checkinId, {
+          const returnBody: Record<string, unknown> = {
             new_closingodometerkm:       Number(odometer),
             new_vehicleconditiononreturn: condition,
             new_notes:                   notes || undefined,
-          })
+          }
+          if (location) {
+            returnBody['crbc3_returnlatitude']  = location.lat
+            returnBody['crbc3_returnlongitude'] = location.lng
+          }
+          await updateResilient(client, TABLES.checkins, checkinId, returnBody, ['crbc3_returnlatitude', 'crbc3_returnlongitude'])
           if (photos.length) {
             try {
               await Promise.all(
@@ -101,7 +140,11 @@ export function CheckInOutPage() {
         if (expectedReturn) {
           body['new_expectedreturn'] = new Date(expectedReturn).toISOString()
         }
-        const id = await client.create(TABLES.trips, body)
+        if (location) {
+          body['crbc3_checkoutlatitude']  = location.lat
+          body['crbc3_checkoutlongitude'] = location.lng
+        }
+        const id = await createResilient(client, TABLES.trips, body, ['crbc3_checkoutlatitude', 'crbc3_checkoutlongitude'])
         if (id && photos.length) {
           try {
             await Promise.all(
@@ -134,6 +177,18 @@ export function CheckInOutPage() {
     )
   }
 
+  if (showScanner) {
+    return (
+      <VehicleScanner
+        onResult={text => {
+          setScanResult({ text, matched: matchesVehicle(text, vehicle) })
+          setShowScanner(false)
+        }}
+        onClose={() => setShowScanner(false)}
+      />
+    )
+  }
+
   return (
     <FormShell
       title={isReturn ? 'Check In Vehicle' : 'Check Out Vehicle'}
@@ -145,11 +200,33 @@ export function CheckInOutPage() {
     >
       {/* Return: show trip summary */}
       {isReturn && odoOut && (
-        <div className="bg-[#EAF2FE] border border-[#0F6FEE]/20 rounded-xl p-3 text-[12.5px] text-[#0A57C2] font-semibold">
-          Checked out at: <span className="font-mono">{Number(odoOut).toLocaleString()} km</span>
-          {distance !== null && distance > 0 && (
-            <span className="ml-2 text-[#0B7A45]">· {distance.toLocaleString()} km this trip</span>
-          )}
+        <div className="bg-[#EAF2FE] border border-[#0F6FEE]/20 rounded-xl p-3 text-[12.5px] text-[#0A57C2] font-semibold flex items-center justify-between gap-2">
+          <span>
+            Checked out at: <span className="font-mono">{Number(odoOut).toLocaleString()} km</span>
+            {distance !== null && distance > 0 && (
+              <span className="ml-2 text-[#0B7A45]">· {distance.toLocaleString()} km this trip</span>
+            )}
+          </span>
+          <span className="text-[10.5px] font-bold opacity-75 shrink-0 text-right max-w-[55%]">
+            {locationStatus === 'pending' && 'Locating…'}
+            {locationStatus === 'ok' && location && isLowAccuracy(location) &&
+              `📍 Approx (±${Math.round(location.accuracy / 1000)}km)`}
+            {locationStatus === 'ok' && location && !isLowAccuracy(location) &&
+              `📍 ${locationName ?? 'Captured'}`}
+            {locationStatus === 'unavailable' && 'No location'}
+          </span>
+        </div>
+      )}
+
+      {/* Checkout: location status (return branch shows it in the summary banner above) */}
+      {!isReturn && (
+        <div className="text-[11px] font-semibold text-fleet-ink-3 -mt-1">
+          {locationStatus === 'pending' && 'Getting your location…'}
+          {locationStatus === 'ok' && location && isLowAccuracy(location) &&
+            `📍 Approximate location only (±${Math.round(location.accuracy / 1000)}km) — GPS unavailable`}
+          {locationStatus === 'ok' && location && !isLowAccuracy(location) &&
+            `📍 ${locationName ?? 'Location captured'}`}
+          {locationStatus === 'unavailable' && 'Location unavailable — continuing without it'}
         </div>
       )}
 
@@ -162,11 +239,16 @@ export function CheckInOutPage() {
           type="number"
           inputMode="numeric"
           value={odometer}
-          onChange={e => setOdometer(e.target.value)}
+          onChange={e => { setOdometer(e.target.value); setOdometerAuto(false) }}
           className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm font-mono focus:border-fleet-blue focus:outline-none"
           placeholder={isReturn ? `More than ${odoOut ?? 0} km` : 'e.g. 95730'}
           required
         />
+        {odometerAuto && (
+          <div className="text-[10.5px] text-fleet-blue font-semibold mt-1">
+            Prefilled from the last recorded reading — please confirm it's correct
+          </div>
+        )}
       </div>
 
       {/* Return: vehicle condition */}
@@ -204,6 +286,36 @@ export function CheckInOutPage() {
       {/* Checkout-only fields */}
       {!isReturn && (
         <>
+          {/* Vehicle verification scan */}
+          {!scanResult ? (
+            <button
+              type="button"
+              onClick={() => setShowScanner(true)}
+              className="w-full flex items-center justify-center gap-2 border-[1.5px] border-dashed border-fleet-line rounded-xl p-3 text-[12.5px] font-bold text-fleet-blue"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <path d="M7 8v8M11 8v8M15 8v8M18 8v8"/>
+              </svg>
+              Scan vehicle VIN / QR to verify
+            </button>
+          ) : (
+            <div className={`rounded-xl p-3 text-[12.5px] font-semibold flex items-center justify-between gap-2 ${
+              scanResult.matched
+                ? 'bg-[#DFF5E8] text-[#0B7A45] border border-[#0B7A45]/20'
+                : 'bg-[#FEF1DC] text-[#B0700B] border border-[#B0700B]/20'
+            }`}>
+              <span>
+                {scanResult.matched
+                  ? '✓ Verified — matches your assigned vehicle'
+                  : `⚠ Doesn't match your assigned vehicle (scanned "${scanResult.text}")`}
+              </span>
+              <button type="button" onClick={() => setShowScanner(true)} className="underline shrink-0 whitespace-nowrap">
+                Rescan
+              </button>
+            </div>
+          )}
+
           <div>
             <label className="block text-[11.5px] font-bold text-navy mb-1.5">
               Purpose of trip <span className="text-[#D92D20]">*</span>

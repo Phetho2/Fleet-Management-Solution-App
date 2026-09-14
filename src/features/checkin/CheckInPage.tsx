@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
-import { createDataverseClient } from '../../api/dataverseClient'
+import { createDataverseClient, createResilient } from '../../api/dataverseClient'
 import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
 import { CameraCapture } from '../../components/CameraCapture'
 import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
 import { useShift } from '../../context/ShiftContext'
+import { captureLocation, reverseGeocode, isLowAccuracy, type GeoPosition } from '../../utils/geolocation'
 
 export function CheckInPage() {
   const { instance } = useMsal()
@@ -20,6 +21,21 @@ export function CheckInPage() {
   const [photos, setPhotos]       = useState<CapturedPhoto[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState<string | null>(null)
+  const [location, setLocation]   = useState<GeoPosition | null>(null)
+  const [locationStatus, setLocationStatus] = useState<'pending' | 'ok' | 'unavailable'>('pending')
+  const [locationName, setLocationName] = useState<string | null>(null)
+
+  // Capture location in the background as soon as the page opens, so it's
+  // ready by the time the driver taps submit — never blocks the form.
+  useEffect(() => {
+    captureLocation().then(pos => {
+      setLocation(pos)
+      setLocationStatus(pos ? 'ok' : 'unavailable')
+      // Skip reverse geocoding a low-accuracy (likely IP-based) fix — resolving
+      // an address for an untrustworthy coordinate just adds false confidence.
+      if (pos && !isLowAccuracy(pos)) reverseGeocode(pos.lat, pos.lng).then(setLocationName)
+    })
+  }, [])
 
   const now = new Date()
   const timeDisplay = now.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })
@@ -33,7 +49,11 @@ export function CheckInPage() {
         new_checkedout: now.toISOString(),
         new_notes:      notes || undefined,
       }
-      const id = await client.create(TABLES.checkins, body)
+      if (location) {
+        body['crbc3_checkinlatitude']  = location.lat
+        body['crbc3_checkinlongitude'] = location.lng
+      }
+      const id = await createResilient(client, TABLES.checkins, body, ['crbc3_checkinlatitude', 'crbc3_checkinlongitude'])
       // Store the checkin record ID so the return flow can PATCH it
       if (id) {
         setCheckinId(id)
@@ -78,8 +98,16 @@ export function CheckInPage() {
       error={error}
     >
       {/* Time confirmation */}
-      <div className="bg-[#EAF2FE] border border-[#0F6FEE]/20 rounded-xl p-3 text-[12.5px] text-[#0A57C2] font-semibold">
-        Signing in at <span className="font-mono">{timeDisplay}</span>
+      <div className="bg-[#EAF2FE] border border-[#0F6FEE]/20 rounded-xl p-3 text-[12.5px] text-[#0A57C2] font-semibold flex items-center justify-between">
+        <span>Signing in at <span className="font-mono">{timeDisplay}</span></span>
+        <span className="text-[10.5px] font-bold opacity-75 text-right">
+          {locationStatus === 'pending' && 'Locating…'}
+          {locationStatus === 'ok' && location && isLowAccuracy(location) &&
+            `📍 Approximate only (±${Math.round(location.accuracy / 1000)}km)`}
+          {locationStatus === 'ok' && location && !isLowAccuracy(location) &&
+            `📍 ${locationName ?? 'Location captured'}`}
+          {locationStatus === 'unavailable' && 'Location unavailable'}
+        </span>
       </div>
 
       {/* Notes */}

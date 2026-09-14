@@ -72,6 +72,90 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
+function isUnknownColumnError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /does not exist on type|Invalid property/i.test(msg)
+}
+
+/**
+ * Creates a record, retrying once without `optionalKeys` if Dataverse rejects
+ * the payload because one of them isn't a real column yet — e.g. a field like
+ * a new geolocation column that hasn't been added in Dataverse yet. Once the
+ * column is added there, it starts being saved with no code change needed.
+ */
+export async function createResilient(
+  client: ReturnType<typeof createDataverseClient>,
+  entity: string,
+  body: Record<string, unknown>,
+  optionalKeys: string[]
+): Promise<string | null> {
+  try {
+    return await client.create(entity, body)
+  } catch (err) {
+    if (!isUnknownColumnError(err)) throw err
+    const fallback = { ...body }
+    for (const key of optionalKeys) delete fallback[key]
+    console.warn(
+      `[Dataverse] ${entity}: dropped ${optionalKeys.join(', ')} — column(s) not found. Record saved without them. ` +
+      `Original error: ${err instanceof Error ? err.message : err}`
+    )
+    return client.create(entity, fallback)
+  }
+}
+
+/** Same fallback behavior as {@link createResilient}, for PATCH updates. */
+export async function updateResilient(
+  client: ReturnType<typeof createDataverseClient>,
+  entity: string,
+  id: string,
+  body: Record<string, unknown>,
+  optionalKeys: string[]
+): Promise<void> {
+  try {
+    await client.update(entity, id, body)
+  } catch (err) {
+    if (!isUnknownColumnError(err)) throw err
+    const fallback = { ...body }
+    for (const key of optionalKeys) delete fallback[key]
+    console.warn(
+      `[Dataverse] ${entity}(${id}): dropped ${optionalKeys.join(', ')} — column(s) not found. Record updated without them. ` +
+      `Original error: ${err instanceof Error ? err.message : err}`
+    )
+    await client.update(entity, id, fallback)
+  }
+}
+
+function stripSelectFields(query: string, fields: string[]): string {
+  return query.replace(/(\$select=)([^&]+)/, (_match, prefix: string, selectList: string) => {
+    const kept = selectList.split(',').filter(f => !fields.includes(f))
+    return prefix + kept.join(',')
+  })
+}
+
+/**
+ * Runs a GET, retrying once with `optionalSelectKeys` stripped from `$select`
+ * if Dataverse 400s because one of them isn't a real column yet — a single
+ * unknown column in $select fails the whole query, so without this fallback
+ * every other field requested in the same call would be lost along with it.
+ */
+export async function retrieveResilient<T>(
+  client: ReturnType<typeof createDataverseClient>,
+  entity: string,
+  query: string,
+  optionalSelectKeys: string[]
+): Promise<{ value: T[] }> {
+  try {
+    return await client.retrieve<T>(entity, query)
+  } catch (err) {
+    if (!isUnknownColumnError(err)) throw err
+    console.warn(
+      `[Dataverse] ${entity}: dropped ${optionalSelectKeys.join(', ')} from $select — column(s) not found. ` +
+      `Original error: ${err instanceof Error ? err.message : err}`
+    )
+    return client.retrieve<T>(entity, stripSelectFields(query, optionalSelectKeys))
+  }
+}
+
 export function createDataverseClient(instance: IPublicClientApplication) {
   return {
     /** GET – returns OData response with a `value` array */
