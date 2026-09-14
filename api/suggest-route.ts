@@ -9,12 +9,18 @@ interface RouteSummary {
   trafficDelayMin: number
 }
 
+async function logAzureMapsFailure(label: string, res: Response): Promise<void> {
+  const body = await res.text()
+  console.error(`[Azure Maps] ${label} failed: ${res.status} ${res.statusText} — ${body.slice(0, 500)}`)
+}
+
 async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
   const url = `${AZURE_MAPS_BASE}/search/address/json?api-version=1.0&subscription-key=${apiKey}&query=${encodeURIComponent(address)}&limit=1`
   const res = await fetch(url)
-  if (!res.ok) return null
+  if (!res.ok) { await logAzureMapsFailure('geocode', res); return null }
   const data = await res.json()
   const pos = data?.results?.[0]?.position
+  if (!pos) console.error(`[Azure Maps] geocode: no results for "${address}" — ${JSON.stringify(data).slice(0, 300)}`)
   return pos ? { lat: pos.lat, lng: pos.lon } : null
 }
 
@@ -29,9 +35,10 @@ async function computeRoute(
     `&query=${originLat},${originLng}:${destLat},${destLng}` +
     `&routeType=${routeType}&traffic=true`
   const res = await fetch(url)
-  if (!res.ok) return null
+  if (!res.ok) { await logAzureMapsFailure(`route (${routeType})`, res); return null }
   const data = await res.json()
   const summary = data?.routes?.[0]?.summary
+  if (!summary) console.error(`[Azure Maps] route (${routeType}): no summary in response — ${JSON.stringify(data).slice(0, 300)}`)
   if (!summary) return null
   return {
     distanceKm: Math.round((summary.lengthInMeters / 1000) * 10) / 10,
@@ -43,7 +50,7 @@ async function computeRoute(
 async function getSevereWeatherAlerts(lat: number, lng: number, apiKey: string): Promise<string[]> {
   const url = `${AZURE_MAPS_BASE}/weather/severe/alerts/json?api-version=1.1&subscription-key=${apiKey}&query=${lat},${lng}`
   const res = await fetch(url)
-  if (!res.ok) return []
+  if (!res.ok) { await logAzureMapsFailure('weather', res); return [] }
   const data = await res.json()
   const results = data?.results ?? []
   return results.map((r: { description?: { localized?: string } }) => r.description?.localized).filter(Boolean)
