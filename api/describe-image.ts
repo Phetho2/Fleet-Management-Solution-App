@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { verifyCaller, setCorsHeaders } from './_lib/auth'
+import { verifyCaller, setCorsHeaders } from '../lib/serverAuth'
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const MAX_BASE64_LENGTH = 8_000_000 // ~6MB image, comfortably under Vercel's request body limit

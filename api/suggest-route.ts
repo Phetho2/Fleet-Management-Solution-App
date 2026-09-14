@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { verifyCaller, setCorsHeaders } from './_lib/auth'
+import { verifyCaller, setCorsHeaders } from '../lib/serverAuth'
 
 const AZURE_MAPS_BASE = 'https://atlas.microsoft.com'
 
