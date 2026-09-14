@@ -14,8 +14,24 @@ async function logAzureMapsFailure(label: string, res: Response): Promise<void> 
   console.error(`[Azure Maps] ${label} failed: ${res.status} ${res.statusText} — ${body.slice(0, 500)}`)
 }
 
-async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
-  const url = `${AZURE_MAPS_BASE}/search/address/json?api-version=1.0&subscription-key=${apiKey}&query=${encodeURIComponent(address)}&limit=1`
+/**
+ * Geocodes an address, biased toward the driver's current location and
+ * restricted to South Africa. Without this, an ambiguous/incomplete address
+ * (e.g. just a street name) can match a same-named place on another
+ * continent — Azure Maps' routing engine then fails with "Origin and
+ * destination have different ProductId's" since it can't route across
+ * road-network tiles from different underlying data providers.
+ */
+async function geocodeAddress(
+  address: string,
+  originLat: number,
+  originLng: number,
+  apiKey: string
+): Promise<{ lat: number; lng: number } | null> {
+  const url =
+    `${AZURE_MAPS_BASE}/search/address/json?api-version=1.0&subscription-key=${apiKey}` +
+    `&query=${encodeURIComponent(address)}&limit=1` +
+    `&lat=${originLat}&lon=${originLng}&radius=300000&countrySet=ZA`
   const res = await fetch(url)
   if (!res.ok) { await logAzureMapsFailure('geocode', res); return null }
   const data = await res.json()
@@ -88,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const dest = await geocodeAddress(destination, apiKey)
+    const dest = await geocodeAddress(destination, originLat, originLng, apiKey)
     if (!dest) {
       res.status(404).json({ error: `Could not find "${destination}"` })
       return
