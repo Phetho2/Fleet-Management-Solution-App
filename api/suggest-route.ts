@@ -81,10 +81,18 @@ async function computeRoute(
     console.error(`[Azure Maps] route (${routeType}): sections present but none matched — ${JSON.stringify(rawSections).slice(0, 300)}`)
   }
 
+  const trafficDelayMin = Math.round((summary.trafficDelayInSeconds ?? 0) / 60)
+  // Always logged (not just on failure) — otherwise "no highlight shown" is
+  // indistinguishable from "genuinely no traffic delay right now" in the logs.
+  console.log(
+    `[Azure Maps] route (${routeType}): trafficDelayMin=${trafficDelayMin}, ` +
+    `rawSections=${rawSections.length}, slowSections=${slowSections.length}`
+  )
+
   return {
     distanceKm: Math.round((summary.lengthInMeters / 1000) * 10) / 10,
     durationMin: Math.round(summary.travelTimeInSeconds / 60),
-    trafficDelayMin: Math.round((summary.trafficDelayInSeconds ?? 0) / 60),
+    trafficDelayMin,
     geometry,
     slowSections,
   }
