@@ -38,6 +38,18 @@ async function verifyCaller(authHeader: string | undefined): Promise<void> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // The native Capacitor app bundles dist/ and serves it from a local
+  // capacitor://localhost (iOS) / https://localhost (Android) origin — always
+  // cross-origin from this Vercel deployment, so CORS must be handled here
+  // even though the PWA/web build calls this same-origin and wouldn't need it.
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).end()
+    return
+  }
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
