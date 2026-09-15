@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { useShift } from '../../context/ShiftContext'
 import { useDriver } from '../../context/DriverContext'
+import { DashboardSkeleton } from '../../components/ui/Skeleton'
 
 /* ── Helpers ─────────────────────────────────────────────── */
 function greeting() {
@@ -61,6 +62,15 @@ function Alert({ type, children }: { type: 'warn' | 'ok' | 'info' | 'error'; chi
   )
 }
 
+type TileColor = 'blue' | 'purple' | 'red' | 'amber' | 'teal'
+const TILE_COLORS: Record<TileColor, { bg: string; fg: string }> = {
+  blue:   { bg: '#EAF2FE', fg: '#0A57C2' },
+  purple: { bg: '#F1EAFE', fg: '#7C3AED' },
+  red:    { bg: '#FDE7E9', fg: '#C42D3A' },
+  amber:  { bg: '#FEF1DC', fg: '#B0700B' },
+  teal:   { bg: '#DFF5F2', fg: '#0F8A7A' },
+}
+
 interface TileProps {
   icon: React.ReactNode
   title: string
@@ -70,20 +80,28 @@ interface TileProps {
   disabled?: boolean
   onClick?: () => void
   wide?: boolean
+  color?: TileColor
 }
-function Tile({ icon, title, sub, badge, done, disabled, onClick, wide }: TileProps) {
+function Tile({ icon, title, sub, badge, done, disabled, onClick, wide, color = 'blue' }: TileProps) {
   const base = wide
     ? 'flex items-center gap-3 p-4 w-full rounded-[13px] border-[1.5px] text-left transition-all active:scale-[.98]'
     : 'flex flex-col p-4 rounded-[13px] border-[1.5px] text-left transition-all active:scale-[.97] relative'
-  const color = done
+  const cardColor = done
     ? 'bg-[#DFF5E8] border-[#0B7A45]'
     : disabled
     ? 'bg-white border-[#E4E9F2] opacity-45 pointer-events-none'
-    : 'bg-white border-[#EAF2FE]'
+    : 'bg-white border-fleet-line'
+
+  const iconStyle = done
+    ? { background: '#fff', color: '#0B7A45' }
+    : { background: TILE_COLORS[color].bg, color: TILE_COLORS[color].fg }
 
   return (
-    <button className={`${base} ${color}`} onClick={onClick} disabled={disabled}>
-      <div className={`grid place-items-center rounded-[10px] shrink-0 ${wide ? 'w-9 h-9' : 'w-9 h-9 mb-3'} ${done ? 'bg-white text-[#0B7A45]' : 'bg-[#B7D3FB] text-navy'}`}>
+    <button className={`${base} ${cardColor}`} onClick={onClick} disabled={disabled}>
+      <div
+        className={`grid place-items-center rounded-[12px] shrink-0 ${wide ? 'w-11 h-11' : 'w-11 h-11 mb-3'}`}
+        style={iconStyle}
+      >
         {icon}
       </div>
       <div className={wide ? 'flex-1' : ''}>
@@ -105,59 +123,52 @@ function Tile({ icon, title, sub, badge, done, disabled, onClick, wide }: TilePr
   )
 }
 
-/* ── Icons ───────────────────────────────────────────────── */
+/* ── Icons ── friendly duotone glyphs (filled base + bold accent), native app-icon style ── */
 const IconClip = () => (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 3h6l1 2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2z"/>
-    <path d="M9 12h6M9 16h4"/>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <rect x="4.5" y="3.5" width="15" height="18" rx="3.5" fill="currentColor" fillOpacity="0.16"/>
+    <rect x="8.5" y="2" width="7" height="4" rx="1.5" fill="currentColor"/>
+    <path d="M8.3 12.7l2.2 2.2 4.6-4.6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 )
 const IconKey = () => (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="8" cy="15" r="4"/>
-    <path d="M10.8 12.2L20 3M17 6l2.5 2.5M14.5 8.5L17 11"/>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <circle cx="8" cy="15" r="5" fill="currentColor" fillOpacity="0.16"/>
+    <circle cx="8" cy="15" r="2.2" fill="currentColor"/>
+    <path d="M11.3 11.8L20 3.1M17 6l2.6 2.6M14.3 8.7l2.3 2.3"
+      stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 )
 const IconCam = () => (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-    <circle cx="12" cy="13" r="3.5"/>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <rect x="2.5" y="6.5" width="19" height="13" rx="3" fill="currentColor" fillOpacity="0.16"/>
+    <path d="M8.3 6.5l1.2-1.9A1.8 1.8 0 0 1 11 3.7h2a1.8 1.8 0 0 1 1.5.9l1.2 1.9"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="2.2"/>
+    <circle cx="12" cy="13" r="1.5" fill="currentColor"/>
   </svg>
 )
 const IconFuel = () => (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 20V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v15M3 20h11"/>
-    <path d="M13 10h3a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-2.5-2.5"/>
-    <path d="M6 8h5"/>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <rect x="3.5" y="3.5" width="10" height="17" rx="2" fill="currentColor" fillOpacity="0.16"/>
+    <rect x="6" y="6" width="5" height="4.5" rx="1" fill="currentColor"/>
+    <path d="M3 20.5h11.5M14.5 10h2.3a2 2 0 0 1 2 2v4.7a1.6 1.6 0 0 0 3.2 0V9.7L19.3 7"
+      stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 )
 const IconWrench = () => (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 6a4.5 4.5 0 0 0 5.7 5.7L13 19.4a2.6 2.6 0 0 1-3.7-3.7L17 8a4.5 4.5 0 0 0-2-2z"/>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="9.5" fill="currentColor" fillOpacity="0.16"/>
+    <path d="M14.7 5.8a5 5 0 0 0-6.1 6.4l-5.3 5.3a2.1 2.1 0 0 0 3 3l5.3-5.3a5 5 0 0 0 6.4-6.1l-2.9 2.9-2.3-.6-.6-2.3 2.5-2.6Z"
+      fill="currentColor"/>
   </svg>
 )
 const IconBell = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
-    <path d="M18 8a6 6 0 1 0-12 0c0 6-3 7-3 7h18s-3-1-3-7"/>
-    <path d="M13.7 20a2 2 0 0 1-3.4 0"/>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2a1 1 0 0 1 1 1v1.1A6.5 6.5 0 0 1 18.5 10.5c0 4 1.1 5.4 2.1 6.1a1 1 0 0 1-.6 1.8H4a1 1 0 0 1-.6-1.8c1-.7 2.1-2.1 2.1-6.1A6.5 6.5 0 0 1 11 4.1V3a1 1 0 0 1 1-1Z"/>
+    <path d="M9.3 20a2.7 2.7 0 0 0 5.4 0h-5.4Z"/>
   </svg>
 )
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <svg className="animate-spin text-fleet-blue" width="32" height="32" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.2"/>
-        <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
-      </svg>
-    </div>
-  )
-}
 
 function formatDisk(isoDate: string | undefined) {
   if (!isoDate) return '—'
@@ -212,7 +223,7 @@ export function DashboardPage() {
         <div className="h-1 bg-fleet-blue" />
       </header>
 
-      {loading && <Spinner />}
+      {loading && <DashboardSkeleton />}
 
       {error && (
         <div className="m-4 p-4 bg-[#FDE7E9] border border-[#C42D3A]/20 text-[#C42D3A] rounded-xl text-sm font-semibold">
@@ -250,6 +261,7 @@ export function DashboardPage() {
             badge={shift === 'not-started' ? 'DUE' : undefined}
             done={shift !== 'not-started'}
             onClick={() => navigate('/inspection')}
+            color="blue"
           />
 
           {/* Sign-in */}
@@ -264,6 +276,7 @@ export function DashboardPage() {
             done={['checked-in', 'on-trip', 'returned'].includes(shift)}
             disabled={shift === 'not-started'}
             onClick={() => navigate('/checkin')}
+            color="purple"
           />
 
           {/* Check-out / Check-in vehicle */}
@@ -273,6 +286,7 @@ export function DashboardPage() {
               title="Check in"
               sub="Log closing odometer & condition"
               onClick={() => navigate('/checkinout')}
+              color="purple"
             />
           ) : (
             <Tile
@@ -286,18 +300,19 @@ export function DashboardPage() {
               done={shift === 'returned'}
               disabled={shift !== 'checked-in'}
               onClick={() => navigate('/checkinout')}
+              color="purple"
             />
           )}
 
           {/* Incident */}
-          <Tile icon={<IconCam />} title="Report incident" sub="With photos" onClick={() => navigate('/incident')} />
+          <Tile icon={<IconCam />} title="Report incident" sub="With photos" onClick={() => navigate('/incident')} color="red" />
         </div>
 
         {/* Fuel — full-width */}
-        <Tile icon={<IconFuel />} title="Fuel &amp; mileage" sub="Capture refuel" onClick={() => navigate('/fuel')} wide />
+        <Tile icon={<IconFuel />} title="Fuel &amp; mileage" sub="Capture refuel" onClick={() => navigate('/fuel')} wide color="amber" />
 
         {/* Defect — full-width */}
-        <Tile icon={<IconWrench />} title="Log a defect" sub="Something not working right" onClick={() => navigate('/defects')} wide />
+        <Tile icon={<IconWrench />} title="Log a defect" sub="Something not working right" onClick={() => navigate('/defects')} wide color="teal" />
 
         {/* Next service info */}
         {vehicle && (

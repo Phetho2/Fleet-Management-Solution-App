@@ -4,6 +4,8 @@ import { useMsal } from '@azure/msal-react'
 import { createDataverseClient, createResilient, updateResilient, getDataverseToken } from '../../api/dataverseClient'
 import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
+import { Select } from '../../components/ui/Select'
+import { useToast } from '../../components/ui/Toast'
 import { CameraCapture } from '../../components/CameraCapture'
 import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { VehicleScanner } from '../../components/VehicleScanner'
@@ -26,8 +28,12 @@ const CONDITIONS = [
   { value: 100000002, label: 'Poor',  sub: 'Damage or issues to report' },
 ]
 
+const PURPOSE_OPTIONS = ['Client site visit', 'Depot collection', 'Delivery run', 'Maintenance drop-off', 'Other']
+  .map(p => ({ value: p, label: p }))
+
 export function CheckInOutPage() {
   const { instance } = useMsal()
+  const toast = useToast()
   const { vehicle } = useDriver()
   const { shift, odoOut, checkinId, setShift, setOdoOut } = useShift()
   const navigate = useNavigate()
@@ -197,6 +203,7 @@ export function CheckInOutPage() {
         setOdoOut(odometer)
         setShift('on-trip')
       }
+      toast(isReturn ? 'Checked in — trip closed.' : 'Checked out — have a safe trip.')
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submission failed')
@@ -378,15 +385,12 @@ export function CheckInOutPage() {
             <label className="block text-[11.5px] font-bold text-navy mb-1.5">
               Purpose of trip <span className="text-[#D92D20]">*</span>
             </label>
-            <select
+            <Select
               value={purpose}
-              onChange={e => setPurpose(e.target.value)}
-              className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm bg-white focus:border-fleet-blue focus:outline-none appearance-none"
-            >
-              {['Client site visit', 'Depot collection', 'Delivery run', 'Maintenance drop-off', 'Other'].map(p => (
-                <option key={p}>{p}</option>
-              ))}
-            </select>
+              onChange={setPurpose}
+              options={PURPOSE_OPTIONS}
+              sheetTitle="Purpose of trip"
+            />
           </div>
 
           <div>

@@ -4,6 +4,7 @@ import { useMsal } from '@azure/msal-react'
 import { createDataverseClient, getDataverseToken } from '../../api/dataverseClient'
 import { TABLES, ENTITY_LOGICAL } from '../../api/tables'
 import { FormShell } from '../../components/FormShell'
+import { Select } from '../../components/ui/Select'
 import { CameraCapture } from '../../components/CameraCapture'
 import { PhotoField, type CapturedPhoto } from '../../components/PhotoField'
 import { useDriver } from '../../context/DriverContext'
@@ -99,15 +100,15 @@ function ChoicePicker({ value, onChange, options }: {
 /* ── Step definitions ─────────────────────────────────────── */
 const STEPS = ['Location & odometer', 'Condition checks', 'Cleanliness & lights', 'Confirm & sign']
 
-// Picklist option values below are placeholder guesses (following this project's
-// convention for custom local option sets). Verify/replace via Profile →
-// "Discover picklist option values" against new_dailyinspection before relying on them.
+// Confirmed against Dataverse's new_dailyinspection.new_inspectiontitle picklist —
+// it only accepts 100000000-100000003 (a 5th "Weekly Inspection" guess was invalid
+// and rejected by the server). Labels are still guesses; verify via Profile →
+// "Discover picklist option values" if they don't match what the org actually uses.
 const INSPECTION_TITLES = [
   { value: 100000000, label: 'Pre-Trip Inspection' },
   { value: 100000001, label: 'Post-Trip Inspection' },
   { value: 100000002, label: 'Morning Inspection' },
   { value: 100000003, label: 'End-of-Day Inspection' },
-  { value: 100000004, label: 'Weekly Inspection' },
 ]
 
 const CONDITION_OPTIONS = [
@@ -311,20 +312,24 @@ const result = failChecks > 0 ? 2 : 1   // 1=Pass, 2=Fail
       </div>
 
       <Field label="Inspection title" required>
-        <select value={title} onChange={e => setTitle(Number(e.target.value))}
-          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm bg-white focus:border-fleet-blue focus:outline-none appearance-none">
-          <option value="" disabled>Select inspection type…</option>
-          {INSPECTION_TITLES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        <Select
+          value={title}
+          onChange={setTitle}
+          options={INSPECTION_TITLES}
+          placeholder="Select inspection type…"
+          sheetTitle="Inspection type"
+        />
       </Field>
 
       <SectionLabel>Location</SectionLabel>
       <Field label="Site / Location name">
-        <select value={site} onChange={e => setSite(Number(e.target.value))}
-          className="w-full border-[1.5px] border-fleet-line rounded-xl p-3 text-sm bg-white focus:border-fleet-blue focus:outline-none appearance-none">
-          <option value="" disabled>Select a location…</option>
-          {SITE_LOCATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+        <Select
+          value={site}
+          onChange={setSite}
+          options={SITE_LOCATIONS}
+          placeholder="Select a location…"
+          sheetTitle="Site / location"
+        />
       </Field>
 
       <SectionLabel>Odometer</SectionLabel>

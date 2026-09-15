@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { AuthenticatedTemplate, UnauthenticatedTemplate } from '@azure/msal-react'
 import { useAuth } from './auth/useAuth'
+import { ToastProvider } from './components/ui/Toast'
 
 import { DashboardPage } from './features/dashboard/DashboardPage'
 import { TodayPage }     from './features/today/TodayPage'
@@ -15,37 +16,71 @@ import { DefectsPage }        from './features/defects/DefectsPage'
 import { FuelPage }           from './features/fuel/FuelPage'
 import { AcknowledgementPage} from './features/acknowledgement/AcknowledgementPage'
 
-/* ── Icons ──────────────────────────────────────────────── */
+/* ── Icons ── outline when inactive, soft-filled "duotone" when active ──
+   (same visual language as the dashboard tiles) ─────────────────────── */
 function IconHome({ active }: { active: boolean }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinejoin="round">
-      <path d="M3 10.5L12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M3 10.5L12 3l9 7.5" stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round"/>
+      <path
+        d="M5.5 9.5V20h13V9.5"
+        fill={active ? 'currentColor' : 'none'}
+        fillOpacity={active ? 0.16 : 1}
+        stroke="currentColor"
+        strokeWidth={active ? 2.4 : 2}
+        strokeLinejoin="round"
+      />
+      {active && <rect x="10" y="14" width="4" height="6" rx="0.8" fill="currentColor"/>}
     </svg>
   )
 }
 function IconTasks({ active }: { active: boolean }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 3h6l1 2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2z"/>
-      <path d="M9 12.5l2 2 4-4"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M9 3h6l1 2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2z"
+        fill={active ? 'currentColor' : 'none'}
+        fillOpacity={active ? 0.16 : 1}
+        stroke="currentColor"
+        strokeWidth={active ? 2 : 1.9}
+        strokeLinejoin="round"
+      />
+      <path d="M9 12.5l2 2 4-4" stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
 function IconActivity({ active }: { active: boolean }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <circle
+        cx="12" cy="12" r="9"
+        fill={active ? 'currentColor' : 'none'}
+        fillOpacity={active ? 0.16 : 1}
+        stroke="currentColor"
+        strokeWidth={active ? 2 : 1.9}
+      />
+      <path d="M12 7v5l3.5 2" stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round"/>
+      {active && <circle cx="12" cy="12" r="1.2" fill="currentColor"/>}
     </svg>
   )
 }
 function IconUser({ active }: { active: boolean }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round">
-      <circle cx="12" cy="9" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <circle
+        cx="12" cy="9" r="3.6"
+        fill={active ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={active ? 2.4 : 2}
+      />
+      <path
+        d="M5 20a7 7 0 0 1 14 0"
+        fill={active ? 'currentColor' : 'none'}
+        fillOpacity={active ? 0.16 : 1}
+        stroke="currentColor"
+        strokeWidth={active ? 2.4 : 2}
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
@@ -74,14 +109,16 @@ function AppNav() {
             to={to}
             end
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-1 text-[10.5px] font-bold transition-colors ${
+              `flex flex-col items-center justify-center gap-1 text-[10.5px] font-bold transition-colors active:scale-95 ${
                 isActive ? 'text-fleet-blue' : 'text-fleet-ink-3'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <Icon active={isActive} />
+                <span className={`grid place-items-center w-11 h-6 rounded-full transition-colors ${isActive ? 'bg-fleet-blue-tint' : ''}`}>
+                  <Icon active={isActive} />
+                </span>
                 <span>{label}</span>
               </>
             )}
@@ -163,13 +200,15 @@ function Shell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthenticatedTemplate>
-        <Shell />
-      </AuthenticatedTemplate>
-      <UnauthenticatedTemplate>
-        <LoginScreen />
-      </UnauthenticatedTemplate>
-    </BrowserRouter>
+    <ToastProvider>
+      <BrowserRouter>
+        <AuthenticatedTemplate>
+          <Shell />
+        </AuthenticatedTemplate>
+        <UnauthenticatedTemplate>
+          <LoginScreen />
+        </UnauthenticatedTemplate>
+      </BrowserRouter>
+    </ToastProvider>
   )
 }

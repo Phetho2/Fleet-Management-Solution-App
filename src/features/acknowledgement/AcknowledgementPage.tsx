@@ -3,17 +3,20 @@ import { useMsal } from '@azure/msal-react'
 import { createDataverseClient } from '../../api/dataverseClient'
 import { FormShell } from '../../components/FormShell'
 import { SignaturePad } from '../../components/SignaturePad'
+import { Select } from '../../components/ui/Select'
+import { useToast } from '../../components/ui/Toast'
 
 const ACK_TYPES = [
   'Vehicle Usage Policy',
   'Road Safety Pledge',
   'Incident Reporting Policy',
   'Fuel Card Policy',
-]
+].map(t => ({ value: t, label: t }))
 
 export function AcknowledgementPage() {
   const { instance } = useMsal()
-  const [selectedType, setSelectedType] = useState(ACK_TYPES[0])
+  const toast = useToast()
+  const [selectedType, setSelectedType] = useState(ACK_TYPES[0].value)
   const [signature, setSignature] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,6 +34,7 @@ export function AcknowledgementPage() {
         new_signaturebase64: signature.split(',')[1]
       })
       setSuccess('Acknowledgement recorded.')
+      toast('Acknowledgement recorded.')
       setSignature(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Submission failed')
@@ -43,24 +47,25 @@ export function AcknowledgementPage() {
     <FormShell title="Digital Acknowledgement" onSubmit={handleSubmit}
       submitting={submitting} error={error} success={success}>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Document</label>
-        <select value={selectedType}
-          onChange={e => setSelectedType(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg p-3 text-sm bg-white">
-          {ACK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <label className="block text-[11.5px] font-bold text-navy mb-1.5">Document</label>
+        <Select
+          value={selectedType}
+          onChange={setSelectedType}
+          options={ACK_TYPES}
+          sheetTitle="Document"
+        />
       </div>
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
-        I acknowledge that I have read and understood the <strong>{selectedType}</strong> and agree to comply with all requirements stated therein.
+      <div className="bg-fleet-blue-tint border border-[#0F6FEE]/20 rounded-xl p-4 text-sm text-fleet-ink-2">
+        I acknowledge that I have read and understood the <strong className="text-navy">{selectedType}</strong> and agree to comply with all requirements stated therein.
       </div>
       {signature ? (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Signature</label>
-          <div className="border border-gray-300 rounded-lg overflow-hidden">
+          <label className="block text-[11.5px] font-bold text-navy mb-1.5">Signature</label>
+          <div className="border-[1.5px] border-fleet-line rounded-xl overflow-hidden">
             <img src={signature} alt="Signature" className="w-full bg-white" />
           </div>
           <button type="button" onClick={() => setSignature(null)}
-            className="mt-2 text-sm text-red-600">
+            className="mt-2 text-sm font-semibold text-[#C42D3A]">
             Clear signature
           </button>
         </div>
